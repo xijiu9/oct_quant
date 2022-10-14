@@ -1,0 +1,12 @@
+results
+results_cifar
+results_imagenet
+*.log
+.idea
+__pycache__
+*.pdf
+*.npz
+*.png
+.DS_Store
+*.jpg
+*.pptx
