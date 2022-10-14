@@ -6,8 +6,7 @@ import torch.distributed as dist
 from torch import tensor
 import random
 
-from image_classification.preconditioner import ScalarPreconditioner, DiagonalPreconditioner, \
-    BlockwiseHouseholderPreconditioner, ScalarPreconditionerAct, TwoLayerWeightPreconditioner, lsq_per_tensor
+from image_classification.preconditioner import ScalarPreconditioner, ScalarPreconditionerAct, TwoLayerWeightPreconditioner, lsq_per_tensor
 from matplotlib import pyplot as plt
 
 class QuantizationConfig:
