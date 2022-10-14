@@ -77,7 +77,7 @@ def main():
 
         print(cmd)
 
-        stdout = None if local_rank == 0 else open("GPU_"+str(local_rank)+".log", "w")
+        stdout = None if local_rank == 0 else open("GPU_LOG/GPU_"+str(local_rank)+".log", "w")
 
         process = subprocess.Popen(cmd, env=current_env, stdout=stdout)
         processes.append(process)

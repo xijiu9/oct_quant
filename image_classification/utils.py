@@ -24,7 +24,6 @@ class QuantizationConfig:
         self.biased = False
         self.grads = None
         self.acts = None
-        self.hadamard = False
         self.biprecision = True
         self.freeze_step = 0
         self.twolayer_weight = False

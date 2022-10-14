@@ -1,6 +1,7 @@
 import argparse
 import os
 
+
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -15,58 +16,95 @@ parser = argparse.ArgumentParser(description='test')
 parser.add_argument('--twolayers_gradweight', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--twolayers_gradinputt', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
+
 parser.add_argument('--training-bit', type=str, default='', help='weight number of bits',
-                    choices=['full_precision', 'only_weight', 'all4bit', 'forward8'])
-
+                    choices=['exact', 'qat', 'all8bit', 'only_weight', 'weight4', 'all4bit', 'forward8', 'forward4'])
 parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
-                    choices=['scratch', 'checkpoint', 'gradually', 'checkpoint_from_zero', 'checkpoint_full_precision'])
+                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision'])
 parser.add_argument('--checkpoint_epoch_full_precision', type=int, default=0, help='full precision')
-parser.add_argument('--epochs', default=200, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('--warmup', type=int, default=4, help='freeze or not the step size update')
-parser.add_argument('--lr', type=float, default=0.4, help='freeze or not the step size update')
-parser.add_argument('--batch-size', type=int, default=50, help='freeze or not the step size update')
+parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient')
+parser.add_argument('--amp', action='store_true', help='Run model AMP (automatic mixed precision) mode.')
 
+parser.add_argument('--arch', type=str, default='resnet50', help='clip gradient to 0.01(CIFAR)')
+parser.add_argument('--gpu-num', type=int, default=8, help='clip gradient to 0.01(CIFAR)')
+parser.add_argument('--lr', type=float, default=1.024, help='clip gradient to 0.01(CIFAR)')
+parser.add_argument('--weight-decay', '--wd', default=3.0517578125e-05, type=float, metavar='W', help='weight decay (default: 1e-4)')
+parser.add_argument('--batch-size', type=int, default=128, help='clip gradient to 0.01(CIFAR)')
+parser.add_argument('--optimizer-batch-size', type=int, default=1024, help='clip gradient to 0.01(CIFAR)')
+parser.add_argument('--warmup', default=4, type=int, metavar='E', help='number of warmup epochs')
+
+parser.add_argument("--master_port", default=29500, type=int,
+                    help="Master node (rank 0)'s free port that needs to "
+                         "be used for communciation during distributed "
+                         "training")
+parser.add_argument("--master_addr", default="127.0.0.1", type=str,
+                    help="Master node (rank 0)'s address, should be either "
+                         "the IP address or the hostname of node 0, for "
+                         "single node multi-proc training, the "
+                         "--master_addr can simply be 127.0.0.1")
 args = parser.parse_args()
 
-if args.training-bit == 'full_precision':
+assert args.gpu_num * args.batch_size == 1000 * args.lr
+assert args.gpu_num * args.batch_size == args.optimizer_batch_size
+
+arg = " -c quantize --qa=True --qw=True --qg=True"
+
+if args.training_bit == 'all8bit':
     bbits, bwbits, awbits = 8, 8, 8
-elif args.training-bit == 'only_weight':
+elif args.training_bit == 'exact':
+    arg = ''
+    bbits, bwbits, awbits = 0, 0, 0
+elif args.training_bit == 'qat':
+    bbits, bwbits, awbits = 0, 0, 8
+    arg = "-c quantize --qa=True --qw=True --qg=False"
+elif args.training_bit == 'only_weight':
     bbits, bwbits, awbits = 8, 4, 4
-elif args.training-bit == 'all4bit':
+elif args.training_bit == 'weight4':
+    bbits, bwbits, awbits = 8, 4, 8
+elif args.training_bit == 'all4bit':
     bbits, bwbits, awbits = 4, 4, 4
-elif args.training-bit == 'forward8':
+elif args.training_bit == 'forward8':
     bbits, bwbits, awbits = 4, 4, 8
+elif args.training_bit == 'forward4':
+    bbits, bwbits, awbits = 8, 8, 4
 else:
     bbits, bwbits, awbits = 0, 0, 0
 
+if args.twolayers_gradweight:
+    assert bwbits == 4
+if args.twolayers_gradinputt:
+    assert bbits == 4
 
 if args.twolayers_gradweight and args.twolayers_gradinputt:
     method = 'twolayer'
 elif args.twolayers_gradweight and not args.twolayers_gradinputt:
     method = 'twolayer_weightonly'
 elif not args.twolayers_gradweight and not args.twolayers_gradinputt:
-    method = 'full'
+    method = args.training_bit
 
-arg = "-c quantize --qa=True --qw=True --qg=True --persample=False --hadamard=False"
-
-if args.training_strategy == 'checkpoint' or args.training_strategy == "checkpoint_from_zero" \
-        or args.training_strategy == "checkpoint_full_precision":
-    os.system("python ./multiproc.py --nnodes 1 --node_rank 0 --master_addr 127.0.0.1 "
-              "--nproc_per_node 4 ./main.py --arch resnet18 --gather-checkpoints "
-              "--workspace /store/results/{} --batch-size {} --lr {} --warmup {} {} {} "
-              "--bbits {} --bwbits {} --abits --wbits --resume {} "
-              "--twolayers_gradweight {} --twolayers_gradinputt {} --training-strategy {} ".format(
-                method, args.batch_size, args.lr, args.warmup, arg, ???
-                bbits, bwbits, awbits, awbits, model,
-                args.twolayers_gradweight, args.twolayers_gradinputt, args.training_strategy))
-
+if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoint_from_zero':
+    model = ''
+elif args.training_strategy == 'checkpoint_full_precision':
+    model = ''
 else:
-    os.system("python ./multiproc.py --nnodes 1 --node_rank 0 --master_addr 127.0.0.1 "
-              "--nproc_per_node 4 ./main.py --arch resnet18 --gather-checkpoints "
-              "--workspace /store/results/{} --batch-size {} --lr {} --warmup {} {} {} "
-              "--bbits {} --bwbits {} --abits --wbits "
-              "--twolayers_gradweight {} --twolayers_gradinputt {} --training-strategy {} ".format(
-                method, args.batch_size, args.lr, args.warmup, arg, ???
-                bbits, bwbits, awbits, awbits,
-                args.twolayers_gradweight, args.twolayers_gradinputt, args.training_strategy))
+    model = 'pass'
+
+if args.amp:
+    amp_control = '--amp --static-loss-scale 128'
+else:
+    amp_control = ''
+
+os.system("python ./multiproc.py --nnodes 1 --node_rank 0 --master_addr {} --master_port {} \
+            --nproc_per_node {} ./main.py --arch {} --gather-checkpoints \
+            --batch-size {} --lr {} --optimizer-batch-size {} --resume {}\
+            --warmup {} {}  /data/LargeData/Large/ImageNet --workspace ./results/imagenet/{}/models \
+            {} --print-freq 400 --clip-grad {} \
+            --bbits {} --bwbits {} --abits {} --wbits {} --weight-decay {} --lsqforward {} \
+            --twolayers-gradweight {} --twolayers-gradinputt {}"
+            .format(args.master_addr, args.master_port,
+                    args.gpu_num, args.arch,
+                    args.batch_size, args.lr, args.optimizer_batch_size, model,
+                    args.warmup, arg, args.training_bit,
+                    amp_control, args.clip_grad,
+                    bbits, bwbits, awbits, awbits, args.weight_decay, args.lsqforward,
+                    args.twolayers_gradweight, args.twolayers_gradinputt))

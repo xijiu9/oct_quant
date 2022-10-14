@@ -12,8 +12,8 @@ from tqdm import trange
 from image_classification.utils import config
 
 try:
-    from image_classification.preconditioner import ScalarPreconditioner, DiagonalPreconditioner, \
-        BlockwiseHouseholderPreconditioner, ScalarPreconditionerAct, TwoLayerWeightPreconditioner, lsq_per_tensor
+    from image_classification.preconditioner import ScalarPreconditioner, ScalarPreconditionerAct, \
+        TwoLayerWeightPreconditioner, lsq_per_tensor
     from image_classification.utils import twolayer_linearsample_weight, twolayer_convsample_weight, \
         twolayer_linearsample_input, twolayer_convsample_input, checkNAN, checkAbsmean, cnt_plt, list_plt, draw_maxmin
 except:

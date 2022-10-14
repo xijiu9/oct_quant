@@ -179,7 +179,7 @@ def lr_exponential_policy(base_lr, warmup_length, epochs, final_multiplier=0.001
     return lr_policy(_lr_fn, logger=logger)
 
 
-def get_train_step(model_and_loss, optimizer, fp16, use_amp=False, batch_size_multiplier=1):
+def get_train_step(model_and_loss, optimizer, fp16, use_amp=False, batch_size_multiplier=1, clip_grad=10, dataset=''):
     def _step(input, target, optimizer_step=True):
         input_var = Variable(input)
         target_var = Variable(target)
@@ -202,7 +202,8 @@ def get_train_step(model_and_loss, optimizer, fp16, use_amp=False, batch_size_mu
             loss.backward()
 
         if optimizer_step:
-            torch.nn.utils.clip_grad_value_(model_and_loss.model.parameters(), 0.01)
+            if dataset == 'cifar10':
+                torch.nn.utils.clip_grad_value_(model_and_loss.model.parameters(), clip_grad)
 
             opt = optimizer.optimizer if isinstance(optimizer, FP16_Optimizer) else optimizer
             for param_group in opt.param_groups:
@@ -220,7 +221,7 @@ def get_train_step(model_and_loss, optimizer, fp16, use_amp=False, batch_size_mu
 
 
 def train(train_loader, model_and_loss, optimizer, lr_scheduler, fp16, logger, epoch, use_amp=False, prof=-1,
-          batch_size_multiplier=1, register_metrics=True):
+          batch_size_multiplier=1, register_metrics=True, clip_grad=10, dataset=''):
     if register_metrics and logger is not None:
         logger.register_metric('train.top1', log.AverageMeter(), log_level=0)
         logger.register_metric('train.top5', log.AverageMeter(), log_level=0)
@@ -230,7 +231,8 @@ def train(train_loader, model_and_loss, optimizer, lr_scheduler, fp16, logger, e
         logger.register_metric('train.data_time', log.AverageMeter(), log_level=1)
         logger.register_metric('train.compute_time', log.AverageMeter(), log_level=1)
 
-    step = get_train_step(model_and_loss, optimizer, fp16, use_amp=use_amp, batch_size_multiplier=batch_size_multiplier)
+    step = get_train_step(model_and_loss, optimizer, fp16, use_amp=use_amp,
+                          batch_size_multiplier=batch_size_multiplier, clip_grad=clip_grad, dataset=dataset)
 
     model_and_loss.train()
     end = time.time()
@@ -350,7 +352,7 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
                should_backup_checkpoint, use_amp=False,
                batch_size_multiplier=1,
                best_prec1=0, start_epoch=0, prof=-1, skip_training=False, skip_validation=False, save_checkpoints=True,
-               checkpoint_dir='./', args=None, config=None, training_strategy="scratch", seed=0):
+               checkpoint_dir='./', args=None, config=None, training_strategy="scratch"):
     prec1 = -1
     valid_history, epoch_history = [], []
     epoch_iter = range(start_epoch, epochs)
@@ -358,8 +360,12 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
         epoch_iter = logger.epoch_generator_wrapper(epoch_iter)
 
     for epoch in epoch_iter:
-        utils.set_seed_epoch(seed, epoch)
-        print('Epoch ', epoch, 'seed ', seed + epoch)
+        utils.set_seed_epoch(args.seed + args.local_rank, epoch)
+        time_tuple = time.localtime(time.time())
+        print('Epoch {} with Seed {} at Time {}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}:'
+              .format(epoch, args.seed + epoch, time_tuple[0], time_tuple[1], time_tuple[2], time_tuple[3],
+                      time_tuple[4], time_tuple[5]))
+
         try:
             os.remove("debug.txt")
         except:
@@ -370,9 +376,10 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
         start = time.time()
         if not skip_training:
             train(train_loader, model_and_loss, optimizer, lr_scheduler, fp16, logger, epoch, use_amp=use_amp,
-                  prof=prof, register_metrics=epoch == start_epoch, batch_size_multiplier=batch_size_multiplier)
+                  prof=prof, register_metrics=epoch == start_epoch, batch_size_multiplier=batch_size_multiplier,
+                  clip_grad=args.clip_grad, dataset=args.dataset)
         end = time.time()
-        print("time cost:{} s".format(end - start))
+        print("time cost:{} min {} s".format((end - start) // 60, (end - start) % 60))
         if not skip_validation:
             prec1 = validate(val_loader, model_and_loss, fp16, logger, epoch, prof=prof,
                              register_metrics=epoch == start_epoch)

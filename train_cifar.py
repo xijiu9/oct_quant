@@ -10,30 +10,40 @@ def str2bool(v):
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
         return False
     else:
-        raise argparse.ArgumentTypeError('Boolean value expected in train_cifar.')
-
+        raise argparse.ArgumentTypeError('Boolean value expected in train_imagenet.')
 
 parser = argparse.ArgumentParser(description='test')
 parser.add_argument('--twolayers_gradweight', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--twolayers_gradinputt', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
+
 parser.add_argument('--training-bit', type=str, default='', help='weight number of bits',
-                    choices=['full_precision', 'only_weight', 'all4bit', 'forward8', 'forward4'])
-
+                    choices=['exact', 'qat', 'all8bit', 'only_weight', 'weight4', 'all4bit', 'forward8', 'forward4'])
 parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
-                    choices=['scratch', 'checkpoint', 'gradually', 'checkpoint_from_zero', 'checkpoint_full_precision'])
+                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision'])
 parser.add_argument('--checkpoint_epoch_full_precision', type=int, default=0, help='full precision')
-parser.add_argument('--epochs', default=200, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('--weight-decay', default=1e-4, type=float, metavar='N',
-                    help='number of total epochs to run')
+parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient to 0.01(CIFAR)')
+parser.add_argument('--amp', action='store_true', help='Run model AMP (automatic mixed precision) mode.')
 
+parser.add_argument('--lr', type=float, default=0.1, help='clip gradient to 0.01(CIFAR)')
+parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float, metavar='W', help='weight decay (default: 1e-4)')
+parser.add_argument('--warmup', default=20, type=int, metavar='E', help='number of warmup epochs')
 args = parser.parse_args()
 
-if args.training_bit == 'full_precision':
+arg = " -c quantize --qa=True --qw=True --qg=True"
+
+if args.training_bit == 'all8bit':
     bbits, bwbits, awbits = 8, 8, 8
+elif args.training_bit == 'exact':
+    arg = ''
+    bbits, bwbits, awbits = 0, 0, 0
+elif args.training_bit == 'qat':
+    bbits, bwbits, awbits = 0, 0, 8
+    arg = "-c quantize --qa=True --qw=True --qg=False"
 elif args.training_bit == 'only_weight':
     bbits, bwbits, awbits = 8, 4, 4
+elif args.training_bit == 'weight4':
+    bbits, bwbits, awbits = 8, 4, 8
 elif args.training_bit == 'all4bit':
     bbits, bwbits, awbits = 4, 4, 4
 elif args.training_bit == 'forward8':
@@ -42,6 +52,7 @@ elif args.training_bit == 'forward4':
     bbits, bwbits, awbits = 8, 8, 4
 else:
     bbits, bwbits, awbits = 0, 0, 0
+    print("!"*1000)
 
 if args.twolayers_gradweight:
     assert bwbits == 4
@@ -53,70 +64,28 @@ if args.twolayers_gradweight and args.twolayers_gradinputt:
 elif args.twolayers_gradweight and not args.twolayers_gradinputt:
     method = 'twolayer_weightonly'
 elif not args.twolayers_gradweight and not args.twolayers_gradinputt:
-    method = 'full'
+    method = args.training_bit
 
-# model = "results_cifar/{}/models/checkpoint-acc-93.0.pth.tar".format(method)
-model = "results_cifar/{}/models/checkpoint-93.pth.tar".format(method)
-if args.training_strategy == 'checkpoint_full_precision':
-    if args.checkpoint_epoch_full_precision == 0:
-        print("should bigger than 0")
-        exit(0)
-    else:
-        model = "results_cifar/full/models/checkpoint-{}.pth.tar".format(args.checkpoint_epoch_full_precision)
-
-
-workplace = "results_cifar/" + method
-if not os.path.exists(workplace):
-    os.mkdir(workplace)
-
-# if args.net == 'qat':
-#     arg = "-c quantize --qa=True --qw=True --qg=False"
-#
-#     os.system("python main.py --dataset cifar10 --arch preact_resnet56 --gather-checkpoints --workspace results/{} "
-#               "--label-smoothing 0  --warmup 0 "
-#               "--weight-decay 1e-4 {} ~/data/cifar10".format(method, arg))
-# elif args.net == 'ptq':
-
-arg = " -c quantize --qa=True --qw=True --qg=True --persample=False --hadamard=False"
-
-if args.lsqforward:
-    arg = " -c quantize --qa=True --qw=True --qg=True --persample=False --hadamard=False"
-    method = 'lsq/lsq_' + str(bbits) + str(bwbits) + str(awbits)
-    model = "results_cifar/{}/models/checkpoint-93.3.pth.tar".format(method)
-    workplace = "results_cifar/" + method
-
-if args.training_strategy == 'checkpoint' or args.training_strategy == "checkpoint_from_zero" \
-        or args.training_strategy == "checkpoint_full_precision":
-    os.system("python main.py --dataset cifar10 --arch preact_resnet56 --gather-checkpoints "
-              "--workspace {} --twolayers_gradweight {} --twolayers_gradinputt {} "
-              "--lsqforward {} {} ~/data/cifar10 --training-strategy {} --epochs {} "
-              "--resume {} --bbits {} --bwbits {} --abits {} --wbits {} --weight-decay {}".format(
-                workplace, args.twolayers_gradweight, args.twolayers_gradinputt,
-                args.lsqforward, arg, args.training_strategy, args.epochs,
-                model, bbits, bwbits, awbits, awbits, args.weight_decay))
+if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoint_from_zero':
+    model = ''
+elif args.training_strategy == 'checkpoint_full_precision':
+    model = ''
 else:
-    os.system("python main.py --dataset cifar10 --arch preact_resnet56 --gather-checkpoints "
-              "--workspace {} --twolayers_gradweight {} --twolayers_gradinputt {} "
-              "--lsqforward {} {} ~/data/cifar10 --training-strategy {} --epochs {} "
-              "--bbits {} --bwbits {} --abits {} --wbits {} --weight-decay {}".format(
-                workplace, args.twolayers_gradweight, args.twolayers_gradinputt,
-                args.lsqforward, arg, args.training_strategy, args.epochs,
-                bbits, bwbits, awbits, awbits, args.weight_decay))
-    # {} ~/data/cifar10 --resume {}".format(args.twolayersweight, args.lsqforward, method, arg, model))
+    model = 'pass'
 
-# elif args.net == 'psq':
-#     arg = "-c quantize --qa=True --qw=True --qg=True --persample=True --hadamard=False --bbits={}".format(args.bbits)
-#
-#     os.system("python main.py --dataset cifar10 --arch preact_resnet56 --gather-checkpoints --workspace results/{} "
-#               "--lr 0.1 --momentum 0.9 --label-smoothing 0  --warmup 0 "
-#               "--weight-decay 1e-4 {} ~/data/cifar10 --resume {}".format(method, arg, model))
-#               # "--weight-decay 1e-4 {} ~/data/cifar10".format(method, arg))
-#
-#
-# elif args.net == 'bhq':
-#     arg = "-c quantize --qa=True --qw=True --qg=True --persample=True --hadamard=True --bbits={}".format(args.bbits)
-#
-#     os.system("python main.py --dataset cifar10 --arch preact_resnet56 --gather-checkpoints --workspace results/{} "
-#               "--lr 0.1 --momentum 0.9 --label-smoothing 0  --warmup 0 "
-#               "--weight-decay 1e-4 {} ~/data/cifar10 --resume {}".format(method, arg, model))
-#               # "--weight-decay 1e-4 {} ~/data/cifar10".format(method, arg))
+if args.amp:
+    amp_control = '--amp --static-loss-scale 128'
+else:
+    amp_control = ''
+
+os.system("python ./main.py --arch preact_resnet56 --gather-checkpoints \
+            --lr {} --resume {} --dataset cifar10 --momentum 0.9 --weight-decay {} --epoch 200\
+            --warmup {} {}  ~/data/cifar10 --workspace ./results/cifar/{}/models \
+            {} --print-freq 200 --clip-grad {} \
+            --bbits {} --bwbits {} --abits {} --wbits {} --lsqforward {} \
+            --twolayers-gradweight {} --twolayers-gradinputt {}"
+            .format(args.lr, model, args.weight_decay,
+                    args.warmup, arg, args.training_bit,
+                    amp_control, args.clip_grad,
+                    bbits, bwbits, awbits, awbits, args.lsqforward,
+                    args.twolayers_gradweight, args.twolayers_gradinputt))
