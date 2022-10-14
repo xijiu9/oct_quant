@@ -160,8 +160,8 @@ def add_parser_arguments(parser):
 
     parser.add_argument('--biprecision', type=str2bool, default=True, help='Gradient bifurcation')
     parser.add_argument('--freeze-step', type=int, default=0, help='freeze or not the step size update')
-    parser.add_argument('--twolayers_gradweight', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
-    parser.add_argument('--twolayers_gradinputt', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+    parser.add_argument('--twolayers-gradweight', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+    parser.add_argument('--twolayers-gradinputt', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
     parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
     parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient')
 
