@@ -138,14 +138,14 @@ class PreActResNet(nn.Module):
         super(PreActResNet, self).__init__()
         self.inplanes = 16
         self.builder = builder
-        self.conv1 = builder.conv3x3(3, 16, first_or_last=True)
+        self.conv1 = builder.conv3x3(3, 16, exact=True)
         self.layer1 = self._make_layer(block, 16, num_blocks[0])
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
         self.bn = builder.batchnorm(64 * block.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.avgpool = nn.AvgPool2d(8, stride=1)
-        self.fc = builder.linear(64 * block.expansion, num_classes, first_or_last=True, symm=False)
+        self.fc = builder.linear(64 * block.expansion, num_classes, exact=True)
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None

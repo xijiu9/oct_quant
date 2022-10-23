@@ -283,15 +283,12 @@ class QConv2d(nn.Conv2d):
     """docstring for QConv2d."""
 
     def __init__(self, in_channels, out_channels, kernel_size,
-                 stride=1, padding=0, dilation=1, groups=1, bias=True, first_or_last=False, symm=True):
+                 stride=1, padding=0, dilation=1, groups=1, bias=True, symm=True):
         super(QConv2d, self).__init__(in_channels, out_channels, kernel_size,
                                       stride, padding, dilation, groups, bias)
         self.quantize_input = QuantMeasure()
-        self.first_or_last = first_or_last
         self.symm = symm
-        if first_or_last:
-            print("ohhhhhhh conv")
-        if config.lsqforward and not self.first_or_last:
+        if config.lsqforward:
             self.lsqweight = LSQPerTensor(config.weight_num_bits, inputtype="weight")
             self.lsqactive = LSQPerTensor(config.activation_num_bits, symm=symm, inputtype="activation")
 
@@ -302,7 +299,7 @@ class QConv2d(nn.Conv2d):
         if config.acts is not None:
             config.acts.append(input.detach().cpu().numpy())
 
-        if config.quantize_activation and not self.first_or_last:
+        if config.quantize_activation:
             if config.lsqforward:
                 qinput = self.lsqactive(input)
             else:
@@ -311,7 +308,7 @@ class QConv2d(nn.Conv2d):
         else:
             qinput = input
         # torch.save(self.weight, 'image_classification/debug_tensor/weight.pt')
-        if config.quantize_weights and not self.first_or_last:  # TODO weight quantization scheme...
+        if config.quantize_weights:  # TODO weight quantization scheme...
             if config.lsqforward:
                 qweight = self.lsqweight(self.weight)
             else:
@@ -339,19 +336,16 @@ class QConv2d(nn.Conv2d):
 class QLinear(nn.Linear):
     """docstring for QConv2d."""
 
-    def __init__(self, in_features, out_features, bias=True, first_or_last=False, symm=True):
+    def __init__(self, in_features, out_features, bias=True, symm=True):
         super(QLinear, self).__init__(in_features, out_features, bias)
         self.quantize_input = QuantMeasure()
-        self.first_or_last = first_or_last
-        if first_or_last:
-            print("ohhhhhhh linear")
-        if config.lsqforward and not self.first_or_last:
+        if config.lsqforward:
             self.lsqweight = LSQPerTensor(config.weight_num_bits, inputtype="weight")
             self.lsqactive = LSQPerTensor(config.activation_num_bits, symm=symm, inputtype="activation")
 
     def forward(self, input):
-
-        if config.quantize_activation and not self.first_or_last:
+        print("QLinear should not be used!")
+        if config.quantize_activation:
             if config.lsqforward:
                 qinput = self.lsqactive(input)
             else:
@@ -359,7 +353,7 @@ class QLinear(nn.Linear):
         else:
             qinput = input
 
-        if config.quantize_weights and not self.first_or_last:  # TODO weight quantization scheme...
+        if config.quantize_weights:  # TODO weight quantization scheme...
             if config.lsqforward:
                 qweight = self.lsqweight(self.weight)
             else:
