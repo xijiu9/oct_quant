@@ -266,6 +266,17 @@ class ResNet(nn.Module):
             for b in l:
                 b.debug = debug
 
+    def set_name(self):
+        self.linear_layers = [self.conv1]
+        self.conv1.layer_name = 'conv_0'
+        for lid, layer in enumerate([self.layer1, self.layer2, self.layer3, self.layer4]):
+            for bid, block in enumerate(layer):
+                for cid, convlayer in enumerate([block.conv1, block.conv2]):
+                    convlayer.layer_name = 'conv_{}_{}_{}'.format(lid+1, bid+1, cid+1)
+                    self.linear_layers.append(convlayer)
+                if block.downsample is not None:
+                    block.downsample[0].layer_name = 'conv_{}_{}_skip'.format(lid+1, bid+1)
+                    self.linear_layers.append(block.downsample[0])
 
 # ResNet }}}
 
