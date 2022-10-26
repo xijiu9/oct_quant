@@ -127,31 +127,35 @@ class TwoLayerWeightPreconditioner(Preconditioner):
             print(qzero, iqzero, "qzero, iqzero")
 
         if iqzero <= 0:
-            with open("debug.txt", "a") as f:
-                f.write("part 1 break, x is {}, iqzero is {} \n".format(x, iqzero))
+            torch.save(x, 'ckpt/precon1x.pt')
+            print("part 1 break, x is {}, iqzero is {} \n".format(x, iqzero))
 
-        mx = (iqzero - self.num_bins) * mn / iqzero
+        if iqzero > 0:
+            mx = (iqzero - self.num_bins) * mn / iqzero
+        elif iqzero == 0:
+            self.zero_point1, mn = 0, 0
+
         self.scale1 = self.num_bins / (mx - mn)
 
         if debug:
             print(mx, self.scale1, "mx, scale1")
 
         if torch.isnan(self.scale1):
-            print(mx, mn, iqzero)
+            torch.save(x, 'ckpt/precon1x.pt')
+            print(mx, mn, iqzero, 'precon 1 bug')
             with torch.no_grad():
                 mn = min(x.min() - 1e-8, 0)
                 mx = max(x.max() + 1e-8, 0)
-            print("mn is {}, mx is {}".format(mn, mx))
+            print("precon1 bug mn is {}, mx is {}".format(mn, mx))
             self.zero_point1 = mn
             self.scale1 = self.num_bins / (mx - mn)
-            print("scale1 is {}".format(self.scale1))
+            print("precon1 bug scale1 is {}".format(self.scale1))
 
             qzero = -self.zero_point1 * self.scale1
             iqzero = torch.floor(qzero)
 
             if iqzero <= 0:
-                with open("debug.txt", "a") as f:
-                    f.write("part 1 break, x is {}, iqzero is {} \n".format(x, iqzero))
+                print("part 1 break, x is {}, iqzero is {} \n".format(x, iqzero))
 
             mx = (iqzero - self.num_bins) * mn / iqzero
             self.scale1 = self.num_bins / (mx - mn)
@@ -176,29 +180,32 @@ class TwoLayerWeightPreconditioner(Preconditioner):
         iqzero = torch.floor(qzero)
 
         if iqzero <= 0:
-            with open("debug.txt", "a") as f:
-                f.write("part 2 break, x is {}, iqzero is {} \n".format(x, iqzero))
+            torch.save(x, 'ckpt/precon2x.pt')
+            print("part 2 break, x is {}, iqzero is {} \n".format(x, iqzero))
 
-        mx = (iqzero - self.num_bins) * mn / iqzero
+        if iqzero > 0:
+            mx = (iqzero - self.num_bins) * mn / iqzero
+        elif iqzero == 0:
+            self.zero_point2, mn = 0, 0
         self.scale2 = self.num_bins / (mx - mn)
 
         if torch.isnan(self.scale2):
+            torch.save(x, 'ckpt/precon2x.pt')
             # torch.save(x, 'image_classification/ckpt/precon.pt')
             with torch.no_grad():
                 mn = min(residual.min() - 1e-8, 0)
                 mx = max(residual.max() + 1e-8, 0)
 
-            print(mn, mx, "mn, mx")
+            print('precon2 bug', mn, mx, "mn, mx")
             self.zero_point2 = mn
             self.scale2 = self.num_bins / (mx - mn)
 
             qzero = -self.zero_point2 * self.scale2
             iqzero = torch.floor(qzero)
 
-            print(qzero, iqzero, "qzero, iqzero")
+            print('precon2', qzero, iqzero, "qzero, iqzero")
             if iqzero <= 0:
-                with open("debug.txt", "a") as f:
-                    f.write("part 2 break, x is {}, iqzero is {} \n".format(x, iqzero))
+                print("part 2 break, x is {}, iqzero is {} \n".format(x, iqzero))
 
             mx = (iqzero - self.num_bins) * mn / iqzero
             self.scale2 = self.num_bins / (mx - mn)

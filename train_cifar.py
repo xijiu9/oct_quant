@@ -78,7 +78,7 @@ elif not args.twolayers_gradweight and not args.twolayers_gradinputt:
 arg_epochs = 200
 if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoint_from_zero':
     model = 'results/cifar/{}/models/checkpoint-{}.pth.tar'.format(args.training_bit, args.checkpoint_epoch)
-    arg_epochs = 1
+    # arg_epochs = 1
 elif args.training_strategy == 'checkpoint_full_precision':
     model = 'results/cifar/exact/models/saves/checkpoint-{}.pth.tar'.format(args.checkpoint_epoch)
     arg_epochs = 1
