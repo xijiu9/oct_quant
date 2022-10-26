@@ -352,7 +352,7 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
                should_backup_checkpoint, use_amp=False,
                batch_size_multiplier=1,
                best_prec1=0, start_epoch=0, prof=-1, skip_training=False, skip_validation=False, save_checkpoints=True,
-               checkpoint_dir='./', args=None, config=None, training_strategy="scratch"):
+               checkpoint_dir='./', args=None, config=None):
     prec1 = -1
     valid_history, epoch_history = [], []
     epoch_iter = range(start_epoch, epochs)
@@ -371,8 +371,6 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
         except:
             pass
         config.epoch = epoch
-        if training_strategy == "gradually":
-            print("No gradually is allowed")
         start = time.time()
         if not skip_training:
             train(train_loader, model_and_loss, optimizer, lr_scheduler, fp16, logger, epoch, use_amp=use_amp,
@@ -422,8 +420,8 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
         print("calculating variance")
         # fast_dump_2(model_and_loss, optimizer, train_loader, checkpoint_dir)
         # dump(model_and_loss, optimizer, train_loader, checkpoint_dir)
-        # plot_bin_hist(model_and_loss, optimizer, val_loader)
+        plot_bin_hist(model_and_loss, optimizer, val_loader)
         # write_errors(model_and_loss, optimizer, debug_loader)
         # variance_profile(model_and_loss, optimizer, debug_loader)
-        get_var(model_and_loss, optimizer, train_loader)
+        # get_var(model_and_loss, optimizer, train_loader, args=args)
         # plot_weight_hist(model_and_loss, optimizer, train_loader)

@@ -278,6 +278,8 @@ class ResNet(nn.Module):
                     block.downsample[0].layer_name = 'conv_{}_{}_skip'.format(lid+1, bid+1)
                     self.linear_layers.append(block.downsample[0])
 
+        self.fc.layer_name = 'fc'
+        self.linear_layers.append(self.fc)
 # ResNet }}}
 
 

@@ -414,9 +414,9 @@ def plot_bin_hist(model_and_loss, optimizer, val_loader):
     from image_classification.preconditioner import ScalarPreconditionerAct, DiagonalPreconditioner, \
         BlockwiseHouseholderPreconditioner
     plot_each(ScalarPreconditionerAct, lambda x: ScalarPreconditionerAct(x, config.backward_num_bits), 'PTQ', g)
-    plot_each(DiagonalPreconditioner, lambda x: DiagonalPreconditioner(x, config.backward_num_bits), 'PSQ', g)
-    plot_each(BlockwiseHouseholderPreconditioner,
-              lambda x: BlockwiseHouseholderPreconditioner(x, config.backward_num_bits), 'BHQ', g)
+    # plot_each(DiagonalPreconditioner, lambda x: DiagonalPreconditioner(x, config.backward_num_bits), 'PSQ', g)
+    # plot_each(BlockwiseHouseholderPreconditioner,
+    #           lambda x: BlockwiseHouseholderPreconditioner(x, config.backward_num_bits), 'BHQ', g)
 
     # R = g.max(1)[0] - g.min(1)[0]
     # fig, ax = plt.subplots(figsize=(5, 5))
@@ -722,12 +722,13 @@ def variance_profile(model_and_loss, optimizer, val_loader, prefix='.', num_batc
 #
 #     print('Overall Var = {}, Quant Var = {}, Sample Var = {}'.format(all_qg, all_qg - all_sg, all_sg))
 
-def get_var(model_and_loss, optimizer, val_loader, num_batches=10000):
+def get_var(model_and_loss, optimizer, val_loader, args=None):
     if hasattr(model_and_loss.model, 'module'):
         m = model_and_loss.model.module
     else:
         m = model_and_loss.model
-
+    # fopen = open("20221025/{}/{}/grad_weight/var.txt".format(args.dataset, args.checkpoint_epoch), 'a')
+    fopen = open("20221025/{}/{}/{}/var.txt".format(args.dataset, args.checkpoint_epoch, args.bwbits), 'a')
     # Get top 10 batches
     m.set_debug(True)
     m.set_name()
@@ -744,7 +745,7 @@ def get_var(model_and_loss, optimizer, val_loader, num_batches=10000):
         return grad
 
     cnt = 0
-    num_samples = 3
+    num_samples = 1
     all_var = None
     all_bias = None
     for (input, target) in tqdm(val_loader):
@@ -770,8 +771,8 @@ def get_var(model_and_loss, optimizer, val_loader, num_batches=10000):
         except:
             all_var = var
             all_bias = bias
-
-    print("cnt is {}".format(cnt))
+    if args.local_rank == 0:
+        print("cnt is {}".format(cnt), file=fopen)
     all_var, all_bias = [x / cnt for x in all_var], [x / cnt for x in all_bias]
 
     all_qg, all_qb = 0, 0
@@ -780,7 +781,9 @@ def get_var(model_and_loss, optimizer, val_loader, num_batches=10000):
         qb = all_bias[i]
         all_qg += qg
         all_qb += qb
-        print('{}, quant var = {:.3e}, quant bias = {:.3e}'.format(k, qg, qb))
-
-    print('Overall Quant Var = {:.3e}, Quant bias = {:.3e}'
-          .format(all_qg, all_qb))
+        if args.local_rank == 0:
+            print('{}, quant var = {:.3e}, quant bias = {:.3e}'.format(k, qg, qb), file=fopen)
+    if args.local_rank == 0:
+        print('Overall Quant Var = {:.3e}, Quant bias = {:.3e}'
+          .format(all_qg, all_qb), file=fopen)
+    # print("hello world", file=open("20221025/{}/{}/var.txt".format(args.checkpoint_epoch, args.bwbits), 'a'))

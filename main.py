@@ -134,9 +134,7 @@ def add_parser_arguments(parser):
 
     parser.add_argument('--workspace', type=str, default='./')
 
-    parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
-                        choices=['scratch', 'checkpoint', 'gradually',
-                                 'checkpoint_from_zero', 'checkpoint_full_precision'])
+    parser.add_argument('--checkpoint-epoch', type=int, default=0, help='full precision')
 
     def str2bool(v):
         if isinstance(v, bool):
@@ -263,8 +261,6 @@ def main(args):
             optimizer_state = checkpoint['optimizer']
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
-            if args.training_strategy == "checkpoint_from_zero":
-                args.start_epoch = 0
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
             model_state = None
@@ -363,7 +359,7 @@ def main(args):
         skip_training=args.evaluate, skip_validation=args.training_only,
         # skip_training=True, skip_validation=True,
         save_checkpoints=args.save_checkpoints and not args.evaluate, checkpoint_dir=args.workspace, args=args,
-        config=config, training_strategy=args.training_strategy)
+        config=config)
     exp_duration = time.time() - exp_start_time
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
         logger.end()

@@ -13,14 +13,17 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected in train_imagenet.')
 
 parser = argparse.ArgumentParser(description='test')
-parser.add_argument('--twolayers_gradweight', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
-parser.add_argument('--twolayers_gradinputt', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+parser.add_argument('--twolayers_gradweight', '--2gw', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+parser.add_argument('--twolayers_gradinputt', '--2gi', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
 
 parser.add_argument('--training-bit', type=str, default='', help='weight number of bits',
-                    choices=['exact', 'qat', 'all8bit', 'star_weight', 'only_weight', 'weight4', 'all4bit', 'forward8', 'forward4'])
+                    choices=['exact', 'qat', 'all8bit', 'star_weight', 'only_weight', 'weight4', 'all4bit', 'forward8',
+                             'forward4', 'plt'])
+parser.add_argument('--plt-bit', type=str, default='', help='')
 parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
                     choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision'])
+parser.add_argument('--checkpoint-epoch', type=int, default=0, help='full precision')
 parser.add_argument('--checkpoint_epoch_full_precision', type=int, default=0, help='full precision')
 parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient to 0.01(CIFAR)')
 parser.add_argument('--amp', action='store_true', help='Run model AMP (automatic mixed precision) mode.')
@@ -56,12 +59,14 @@ elif args.training_bit == 'forward4':
     bbits, bwbits, awbits = 8, 8, 4
 else:
     bbits, bwbits, awbits = 0, 0, 0
-    print("!"*1000)
+    if args.training_bit == 'plt':
+        arg = "-c quantize --qa={} --qw={} --qg={}".format(args.plt_bit[0], args.plt_bit[1], args.plt_bit[2])
+        bbits, bwbits, awbits = args.plt_bit[5], args.plt_bit[4], args.plt_bit[3]
 
 if args.twolayers_gradweight:
-    assert bwbits == 4
+    assert int(bwbits) == 4
 if args.twolayers_gradinputt:
-    assert bbits == 4
+    assert int(bbits) == 4
 
 if args.twolayers_gradweight and args.twolayers_gradinputt:
     method = 'twolayer'
@@ -70,10 +75,13 @@ elif args.twolayers_gradweight and not args.twolayers_gradinputt:
 elif not args.twolayers_gradweight and not args.twolayers_gradinputt:
     method = args.training_bit
 
+arg_epochs = 200
 if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoint_from_zero':
-    model = ''
+    model = 'results/cifar/{}/models/checkpoint-{}.pth.tar'.format(args.training_bit, args.checkpoint_epoch)
+    arg_epochs = 1
 elif args.training_strategy == 'checkpoint_full_precision':
-    model = ''
+    model = 'results/cifar/exact/models/saves/checkpoint-{}.pth.tar'.format(args.checkpoint_epoch)
+    arg_epochs = 1
 else:
     model = 'pass'
 
@@ -82,13 +90,13 @@ if args.amp:
 else:
     amp_control = ''
 
-os.system("python ./main.py --arch preact_resnet56 --gather-checkpoints \
-            --lr {} --resume {} --dataset cifar10 --momentum 0.9 --weight-decay {} --epoch 200\
+os.system("python ./main.py --arch preact_resnet56 --gather-checkpoints --checkpoint-epoch {} \
+            --lr {} --resume {} --dataset cifar10 --momentum 0.9 --weight-decay {} --epoch {}\
             --warmup {} {}  ~/data/cifar10 --workspace ./results/cifar/{}/models \
             {} --print-freq 300 --clip-grad {} \
             --bbits {} --bwbits {} --abits {} --wbits {} --lsqforward {} \
             --twolayers-gradweight {} --twolayers-gradinputt {}"
-            .format(args.lr, model, args.weight_decay,
+            .format(args.checkpoint_epoch, args.lr, model, args.weight_decay, arg_epochs,
                     args.warmup, arg, args.training_bit,
                     amp_control, args.clip_grad,
                     bbits, bwbits, awbits, awbits, args.lsqforward,

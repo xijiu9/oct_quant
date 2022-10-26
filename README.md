@@ -15,7 +15,10 @@ git clone https://github.com/NVIDIA/apex
 cd apex
 pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 ```
-
+```bash
+pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+pip install -v -e .
+```
 Step 2: Install this repo
 ```bash
 # Make sure that your nvcc version is compatible with the cuda library version used by PyTorch
