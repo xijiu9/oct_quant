@@ -2,7 +2,7 @@ cnt is 390
 conv_0, quant var = 2.304e+00, quant bias = 1.178e-02
 conv_1_1_1, quant var = 5.615e+00, quant bias = 1.822e-01
 conv_1_1_2, quant var = 5.116e+00, quant bias = 1.104e+00
-conv_1_2_1, quant var = 5.298e+00, quant bias = -8.274e-03
+conv_1_2_1, quant var = 5.298e+00, quant bias = -8.276e-03
 conv_1_2_2, quant var = 9.244e+00, quant bias = 1.763e+00
 conv_1_3_1, quant var = 3.660e+00, quant bias = 2.735e-01
 conv_1_3_2, quant var = 2.822e+00, quant bias = 1.943e-01
@@ -34,7 +34,7 @@ conv_2_6_2, quant var = 7.468e-01, quant bias = 2.463e-01
 conv_2_7_1, quant var = 3.582e-01, quant bias = -1.167e-01
 conv_2_7_2, quant var = 5.309e-01, quant bias = 1.186e-01
 conv_2_8_1, quant var = 3.086e-01, quant bias = -2.861e-01
-conv_2_8_2, quant var = 3.929e-01, quant bias = -7.720e-02
+conv_2_8_2, quant var = 3.929e-01, quant bias = -7.721e-02
 conv_2_9_1, quant var = 3.410e-01, quant bias = -6.954e-02
 conv_2_9_2, quant var = 9.159e-01, quant bias = 5.369e-01
 conv_3_1_1, quant var = 3.871e-01, quant bias = 3.268e-01

@@ -727,8 +727,11 @@ def get_var(model_and_loss, optimizer, val_loader, args=None):
         m = model_and_loss.model.module
     else:
         m = model_and_loss.model
-    # fopen = open("20221025/{}/{}/grad_weight/var.txt".format(args.dataset, args.checkpoint_epoch), 'a')
-    fopen = open("20221025/{}/{}/{}/var.txt".format(args.dataset, args.checkpoint_epoch, args.bwbits), 'a')
+
+    if args.twolayers_gradweight:
+        fopen = open("20221025/{}/{}/grad_weight/var.txt".format(args.dataset, args.checkpoint_epoch), 'a')
+    else:
+        fopen = open("20221025/{}/{}/{}/var.txt".format(args.dataset, args.checkpoint_epoch, args.bwbits), 'a')
     # Get top 10 batches
     m.set_debug(True)
     m.set_name()

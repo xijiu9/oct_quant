@@ -1,0 +1,23 @@
+cnt is 2562
+conv_0, quant var = 3.159e-06, quant bias = 7.511e-04
+conv_1_1_1, quant var = 1.022e-04, quant bias = 1.624e-03
+conv_1_1_2, quant var = 2.710e-05, quant bias = -1.021e-03
+conv_1_2_1, quant var = 2.307e-05, quant bias = 2.733e-03
+conv_1_2_2, quant var = 1.070e-05, quant bias = 6.685e-04
+conv_2_1_1, quant var = 2.273e-05, quant bias = 2.912e-03
+conv_2_1_2, quant var = 2.240e-05, quant bias = -7.990e-04
+conv_2_1_skip, quant var = 4.981e-06, quant bias = 1.013e-04
+conv_2_2_1, quant var = 1.846e-05, quant bias = 2.564e-03
+conv_2_2_2, quant var = 9.835e-06, quant bias = -1.831e-04
+conv_3_1_1, quant var = 1.967e-05, quant bias = 1.354e-03
+conv_3_1_2, quant var = 2.635e-05, quant bias = -1.447e-03
+conv_3_1_skip, quant var = 1.787e-06, quant bias = -7.820e-05
+conv_3_2_1, quant var = 1.982e-05, quant bias = 1.708e-03
+conv_3_2_2, quant var = 1.170e-05, quant bias = 2.125e-05
+conv_4_1_1, quant var = 1.436e-05, quant bias = 9.862e-04
+conv_4_1_2, quant var = 2.138e-05, quant bias = -3.072e-03
+conv_4_1_skip, quant var = 2.715e-06, quant bias = -1.547e-04
+conv_4_2_1, quant var = 1.089e-05, quant bias = -1.669e-03
+conv_4_2_2, quant var = 3.480e-06, quant bias = -1.361e-05
+fc, quant var = 3.086e-19, quant bias = 7.838e-12
+Overall Quant Var = 3.768e-04, Quant bias = 6.985e-03

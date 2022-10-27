@@ -4,7 +4,7 @@ conv_1_1_1, quant var = 3.200e-06, quant bias = 1.562e-04
 conv_1_1_2, quant var = 1.997e-06, quant bias = 7.369e-04
 conv_1_2_1, quant var = 1.614e-06, quant bias = 6.960e-05
 conv_1_2_2, quant var = 6.207e-07, quant bias = 1.085e-04
-conv_1_3_1, quant var = 6.468e-07, quant bias = 1.921e-04
+conv_1_3_1, quant var = 6.468e-07, quant bias = 1.922e-04
 conv_1_3_2, quant var = 4.502e-07, quant bias = 2.589e-04
 conv_1_4_1, quant var = 5.025e-07, quant bias = -3.457e-04
 conv_1_4_2, quant var = 3.509e-07, quant bias = -3.587e-04

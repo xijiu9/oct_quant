@@ -1,7 +1,7 @@
 cnt is 390
 conv_0, quant var = 2.048e-06, quant bias = 4.330e-04
 conv_1_1_1, quant var = 2.139e-04, quant bias = -3.663e-03
-conv_1_1_2, quant var = 7.768e-05, quant bias = 3.605e-05
+conv_1_1_2, quant var = 7.768e-05, quant bias = 3.604e-05
 conv_1_2_1, quant var = 6.740e-05, quant bias = -1.060e-03
 conv_1_2_2, quant var = 3.691e-05, quant bias = 4.649e-04
 conv_1_3_1, quant var = 2.051e-05, quant bias = 4.845e-05

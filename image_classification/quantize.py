@@ -22,7 +22,6 @@ except:
     from preconditioner import ScalarPreconditioner, DiagonalPreconditioner, \
         BlockwiseHouseholderPreconditioner, ScalarPreconditionerAct, TwoLayerWeightPreconditioner, lsq_per_tensor
 
-
 QParams = namedtuple('QParams', ['range', 'zero_point', 'num_bits'])
 
 _DEFAULT_FLATTEN = (1, -1)
@@ -65,7 +64,6 @@ class UniformQuantize(InplaceFunction):
             # if info != '' and cnt_plt[info] == threshold[info]:
             #     cnt_plt[info] += 1
             #     draw_maxmin(list_plt, cnt_plt, info)
-
 
         # if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
         #     print(output.view(-1)[:10])
@@ -150,6 +148,17 @@ class conv2d_act(Function):
         else:
             grad_bias = None
 
+        # if config.args.twolayers_gradweight:
+        #     save_dir = '20221025/{}/{}/grad_weight/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch)
+        # else:
+        #     save_dir = '20221025/{}/{}/{}/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch, config.args.bwbits)
+        # torch.save({"grad output": grad_output,
+        #             "grad input": grad_input,
+        #             "grad weight": grad_weight,
+        #             "saved": ctx.saved},
+        #            save_dir)
+        # print("already saved")
+        # exit(0)
         # checkNAN(grad_input, 'grad_input')
         return grad_input, grad_weight, grad_bias, None, None, None, None
 
@@ -449,7 +458,6 @@ if __name__ == '__main__':
     bias_output_2 = grad_output_2_sum[:128] + grad_output_2_sum[128:] - grad_output
     print("bias_weight_2  ", bias_weight_2.mean(), bias_weight_2.abs().mean())
     print("bias_output_2  ", bias_output_2.mean(), bias_output_2.abs().mean())
-
 
 # if __name__ == '__main__':
 #

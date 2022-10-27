@@ -15,7 +15,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser(description='test')
 parser.add_argument('--twolayers_gradweight', '--2gw', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
-parser.add_argument('--twolayers_gradinputt', '2gi', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+parser.add_argument('--twolayers_gradinputt', '--2gi', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
 
 parser.add_argument('--training-bit', type=str, default='', help='weight number of bits',

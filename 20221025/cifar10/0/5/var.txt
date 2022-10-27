@@ -31,13 +31,13 @@ conv_2_5_1, quant var = 1.157e+01, quant bias = 6.767e-01
 conv_2_5_2, quant var = 1.164e+01, quant bias = 2.420e+00
 conv_2_6_1, quant var = 2.157e+01, quant bias = -3.465e+00
 conv_2_6_2, quant var = 1.651e+01, quant bias = 1.993e+00
-conv_2_7_1, quant var = 4.954e+00, quant bias = -2.243e-02
+conv_2_7_1, quant var = 4.954e+00, quant bias = -2.244e-02
 conv_2_7_2, quant var = 4.988e+00, quant bias = -2.471e-01
 conv_2_8_1, quant var = 5.250e+00, quant bias = 7.224e-01
 conv_2_8_2, quant var = 7.954e+00, quant bias = -2.662e-01
 conv_2_9_1, quant var = 4.133e+00, quant bias = 7.421e-01
 conv_2_9_2, quant var = 9.416e+00, quant bias = 2.590e+00
-conv_3_1_1, quant var = 5.719e+00, quant bias = 2.792e-02
+conv_3_1_1, quant var = 5.719e+00, quant bias = 2.791e-02
 conv_3_1_2, quant var = 1.206e+01, quant bias = 2.175e+00
 conv_3_1_skip, quant var = 8.128e-01, quant bias = -2.865e-02
 conv_3_2_1, quant var = 5.818e+00, quant bias = -8.973e-01

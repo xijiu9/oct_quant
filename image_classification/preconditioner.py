@@ -116,6 +116,7 @@ class TwoLayerWeightPreconditioner(Preconditioner):
 
         if debug:
             print("mn is {}, mx is {}".format(mn, mx))
+            print(x.view(-1).topk(3), (-x).view(-1).topk(3))
 
         self.zero_point1 = mn
         self.scale1 = self.num_bins / (mx - mn)
@@ -127,7 +128,8 @@ class TwoLayerWeightPreconditioner(Preconditioner):
             print(qzero, iqzero, "qzero, iqzero")
 
         if iqzero <= 0:
-            torch.save(x, 'ckpt/precon1x.pt')
+            # torch.save(x, 'image_classification/ckpt/precon1x.pt')
+            print("save for 1")
             print("part 1 break, x is {}, iqzero is {} \n".format(x, iqzero))
 
         if iqzero > 0:
@@ -141,7 +143,8 @@ class TwoLayerWeightPreconditioner(Preconditioner):
             print(mx, self.scale1, "mx, scale1")
 
         if torch.isnan(self.scale1):
-            torch.save(x, 'ckpt/precon1x.pt')
+            torch.save(x, 'image_classification/ckpt/precon1x.pt')
+            print("save for 1")
             print(mx, mn, iqzero, 'precon 1 bug')
             with torch.no_grad():
                 mn = min(x.min() - 1e-8, 0)
@@ -162,10 +165,9 @@ class TwoLayerWeightPreconditioner(Preconditioner):
 
 
         first_transform = (x - self.zero_point1) * self.scale1
-        # noise = first_transform.new(first_transform.shape).uniform_(-0.5, 0.5)
-        # first_transform.add_(noise)
         first_transform.clamp_(0.0, self.num_bins).round_()
         first_quantize = first_transform / self.scale1 + self.zero_point1
+
 
         residual = x - first_quantize
 
@@ -176,11 +178,16 @@ class TwoLayerWeightPreconditioner(Preconditioner):
         self.zero_point2 = mn
         self.scale2 = self.num_bins / (mx - mn)
 
+        if debug:
+            print("mn is {}, mx is {}".format(mn, mx))
+            print(residual.view(-1).topk(3), (-residual).view(-1).topk(3))
+
         qzero = -self.zero_point2 * self.scale2
         iqzero = torch.floor(qzero)
 
         if iqzero <= 0:
-            torch.save(x, 'ckpt/precon2x.pt')
+            torch.save(x, 'image_classification/ckpt/precon2x.pt')
+            print("save for 2")
             print("part 2 break, x is {}, iqzero is {} \n".format(x, iqzero))
 
         if iqzero > 0:
@@ -190,7 +197,8 @@ class TwoLayerWeightPreconditioner(Preconditioner):
         self.scale2 = self.num_bins / (mx - mn)
 
         if torch.isnan(self.scale2):
-            torch.save(x, 'ckpt/precon2x.pt')
+            torch.save(x, 'image_classification/ckpt/precon2x.pt')
+            print("save for 2")
             # torch.save(x, 'image_classification/ckpt/precon.pt')
             with torch.no_grad():
                 mn = min(residual.min() - 1e-8, 0)
@@ -214,6 +222,10 @@ class TwoLayerWeightPreconditioner(Preconditioner):
         output = torch.cat([first_transform, second_transform], dim=0)
         # print("the integer is {}".format(output))
         # print("quantize shape is {}".format(output.shape))
+
+        if debug:
+            print("scale1 is {}, scale2 is {}, zero 1 {}, zero 2 {}".format(self.scale1, self.scale2, self.zero_point1, self.zero_point2))
+
 
         return output
 
@@ -273,7 +285,6 @@ class lsq_per_tensor(torch.autograd.Function):
 
 
 if __name__ == '__main__':
-    x = torch.load('ckpt/precon.pt')
+    x = torch.load('ckpt/precon1x.pt')
     print(x)
     T = TwoLayerWeightPreconditioner(x, 4)
-    x1 = T.transform(x, debug=True)

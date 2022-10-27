@@ -39,7 +39,7 @@ conv_2_9_1, quant var = 1.198e-06, quant bias = 2.665e-04
 conv_2_9_2, quant var = 1.178e-06, quant bias = -2.670e-04
 conv_3_1_1, quant var = 2.717e-06, quant bias = -1.734e-05
 conv_3_1_2, quant var = 3.721e-06, quant bias = 1.380e-03
-conv_3_1_skip, quant var = 1.935e-07, quant bias = 4.337e-07
+conv_3_1_skip, quant var = 1.935e-07, quant bias = 4.335e-07
 conv_3_2_1, quant var = 1.770e-06, quant bias = 5.068e-04
 conv_3_2_2, quant var = 1.048e-06, quant bias = 1.341e-03
 conv_3_3_1, quant var = 7.723e-07, quant bias = 1.867e-04
