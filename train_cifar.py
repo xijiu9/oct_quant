@@ -81,7 +81,7 @@ if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoi
     # arg_epochs = 1
 elif args.training_strategy == 'checkpoint_full_precision':
     model = 'results/cifar/exact/models/saves/checkpoint-{}.pth.tar'.format(args.checkpoint_epoch)
-    arg_epochs = 1
+    # arg_epochs = 1
 else:
     model = 'pass'
 

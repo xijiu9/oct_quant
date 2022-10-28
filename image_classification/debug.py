@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 from .quantize import config
 from .utils import *
@@ -333,7 +335,117 @@ def fast_dump_2(model_and_loss, optimizer, val_loader, checkpoint_dir):
             sample_var, quant_var, sample_var + quant_var))
 
 
-def plot_bin_hist(model_and_loss, optimizer, val_loader):
+def leverage_score(args):
+    import actnn.cpp_extension.backward_func as ext_backward_func
+    from image_classification.quantize import quantize
+    from image_classification.utils import twolayer_convsample_weight
+    from image_classification.preconditioner import ScalarPreconditioner, TwoLayerWeightPreconditioner
+
+    torch.set_printoptions(profile="full", linewidth=160)
+
+    if config.args.twolayers_gradweight:
+        load_dir = '20221025/{}/{}/grad_weight'.format(args.dataset, args.checkpoint_epoch)
+    else:
+        load_dir = '20221025/{}/{}/{}'.format(args.dataset, args.checkpoint_epoch,
+                                              args.bwbits)
+    save_file = open(os.path.join(load_dir, 'leverage.txt'), 'a')
+
+    PT = torch.load(os.path.join(load_dir, 'tensor.pt'))
+    grad_output, grad_input, grad_weight, saved, other_args = PT["grad output"], PT["grad input"], PT["grad weight"], \
+                                                              PT["saved"], PT["other args"]
+    inputt, weight, bias = saved
+    stride, padding, dilation, groups = other_args
+
+    _, full_grad_weight = ext_backward_func.cudnn_convolution_backward(
+        inputt, grad_output, weight, padding, stride, dilation, groups,
+        True, False, False,  # ?
+        [False, True])
+    grad_output_8_sum = None
+    grad_output_2_sum = None
+    grad_weight_8_sum = None
+    grad_weight_2_sum = None
+    num_sample = 5
+    for _ in trange(num_sample):
+        grad_output_8 = quantize(grad_output, lambda x: ScalarPreconditioner(x, 8), stochastic=True)
+        grad_output_2 = quantize(grad_output, lambda x: TwoLayerWeightPreconditioner(x, 4), stochastic=True)
+
+        input_sample, grad_output_weight_condi_sample = twolayer_convsample_weight(torch.cat([inputt, inputt], dim=0),
+                                                                                   grad_output_2)
+        vec_norm, index, norm = twolayer_convsample_weight(torch.cat([inputt, inputt], dim=0),
+                                                                                   grad_output_2, debug=True)
+        # grad_weight_2 = grad_output_2.t().mm(torch.cat([inputs, inputs], dim=0))
+        _, grad_weight_2 = ext_backward_func.cudnn_convolution_backward(
+            input_sample, grad_output_weight_condi_sample, weight, padding, stride, dilation, groups,
+            True, False, False,  # ?
+            [False, True])
+
+        # brute force
+        # input_2 = torch.cat([inputt, inputt], dim=0)
+        # new_grad_weight = full_grad_weight.unsqueeze(0).repeat(input_2.shape[0], 1, 1, 1, 1)
+        # for i in range(input_2.shape[0]):
+        #     g2i, i2i = grad_output_2[i].unsqueeze(0), input_2[i].unsqueeze(0)
+        #     _, grad_weight_2_i = ext_backward_func.cudnn_convolution_backward(
+        #         i2i, g2i, weight, padding, stride, dilation, groups,
+        #         True, False, False,  # ?
+        #         [False, True])
+        #     new_grad_weight[i] = grad_weight_2_i
+        #
+        # new_norm, new_abs_norm = new_grad_weight.sum(dim=(1, 2, 3, 4)), new_grad_weight.abs().sum(dim=(1, 2, 3, 4))
+        # index = new_abs_norm.sort()[1]
+        # # index = index[input_2.shape[0] // 2:]
+        # index = index[100:]
+        # grad_weight_2 = new_grad_weight[index].sum(dim=0)
+        #
+        # print(new_norm.sort()[0], new_abs_norm.sort()[0])
+        # exit(0)
+
+        _, grad_weight_8 = ext_backward_func.cudnn_convolution_backward(
+            inputt, grad_output_8, weight, padding, stride, dilation, groups,
+            True, False, False,  # ?
+            [False, True])
+        try:
+            grad_weight_2_sum += grad_weight_2 / num_sample
+            grad_weight_8_sum += grad_weight_8 / num_sample
+            grad_output_2_sum += grad_output_2 / num_sample
+            grad_output_8_sum += grad_output_8 / num_sample
+        except:
+            grad_weight_2_sum = grad_weight_2 / num_sample
+            grad_weight_8_sum = grad_weight_8 / num_sample
+            grad_output_2_sum = grad_output_2 / num_sample
+            grad_output_8_sum = grad_output_8 / num_sample
+
+    # print("fake gradient: ", grad_weight_fake.mean(), grad_weight_fake.abs().mean())
+    print("full gradient: ", full_grad_weight.mean().detach().cpu().numpy(), full_grad_weight.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("grad_output:   ", grad_output.mean().detach().cpu().numpy(), grad_output.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("inputs:        ", inputt.mean().detach().cpu().numpy(), inputt.abs().mean().detach().cpu().numpy(), file=save_file)
+    bias_weight_8 = grad_weight_8_sum - full_grad_weight
+    bias_output_8 = grad_output_8_sum - grad_output
+    print("bias_weight_8  ", bias_weight_8.mean().detach().cpu().numpy(), bias_weight_8.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_output_8  ", bias_output_8.mean().detach().cpu().numpy(), bias_output_8.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("_________________________________________________________________________________")
+    bias_weight_2 = grad_weight_2_sum - full_grad_weight
+    bias_output_2 = grad_output_2_sum[:args.batch_size] + grad_output_2_sum[args.batch_size:] - grad_output
+    print("bias_weight_2  ", bias_weight_2.mean().detach().cpu().numpy(), bias_weight_2.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_output_2  ", bias_output_2.mean().detach().cpu().numpy(), bias_output_2.abs().mean().detach().cpu().numpy(), file=save_file)
+
+    print("index: \n", index, file=save_file)
+
+    vec_norm = vec_norm.sort()[0].detach().cpu().numpy()[::-1]
+    sum_norm = [vec_norm[:i].sum() / vec_norm.sum() for i in range(len(vec_norm))]
+
+    plt.figure(1)
+    plt.title("{}".format(args.checkpoint_epoch))
+    plt.plot(np.arange(len(vec_norm)), vec_norm)
+    plt.savefig(os.path.join(load_dir, 'leverage_score.png'))
+
+    plt.figure(2)
+    plt.title("{}".format(args.checkpoint_epoch))
+    plt.plot(np.arange(len(vec_norm)), sum_norm)
+    plt.savefig(os.path.join(load_dir, 'sum_norm.png'))
+
+
+
+def plot_bin_hist(model_and_loss, optimizer, val_loader, args):
     config.grads = []
     config.acts = []
     data_iter = enumerate(val_loader)
@@ -355,65 +467,75 @@ def plot_bin_hist(model_and_loss, optimizer, val_loader):
     torch.cuda.synchronize()
 
     # fig, ax = plt.subplots(figsize=(5, 5))
-    g = config.grads[20]
+    g = config.grads[10]
     # ax.hist(g.cpu().numpy().ravel(), bins=2**config.backward_num_bits-1)
     # ax.set_yscale('log')
     # fig.savefig('grad_output_hist.pdf')
 
+    num_bins = 2 ** args.bwbits - 1
+
+    if args.twolayers_gradweight:
+        save_dir = "20221026/{}/{}/grad_weight".format(args.dataset, args.checkpoint_epoch)
+    else:
+        save_dir = "20221026/{}/{}/{}".format(args.dataset, args.checkpoint_epoch, args.bwbits)
+
     for i in [1, 2]:
+        mxthres = g[i].abs().max().cpu().numpy() * 1.2
         fig, ax = plt.subplots(figsize=(2.5, 2.5))
-        ax.hist(g[i].cpu().numpy().ravel(), bins=256, range=[-1e-5, 1e-5])
+        ax.hist(g[i].cpu().numpy().ravel(), bins=num_bins, range=[-mxthres, mxthres])
         ax.set_yscale('log')
-        ax.set_xlim([-1e-5, 1e-5])
-        ax.set_xticks([-1e-5, 0, 1e-5])
-        ax.set_xticklabels(['$-10^{-5}$', '$0$', '$10^{-5}$'])
+        ax.set_xlim([-mxthres, mxthres])
+        ax.set_xticks([-mxthres, 0, mxthres])
+        ax.set_xticklabels(['-{:.2e}'.format(mxthres), '$0$', '{:.2e}'.format(mxthres)])
         l, b, w, h = ax.get_position().bounds
         ax.set_position([l + 0.05 * w, b, 0.95 * w, h])
-        fig.savefig('{}_hist.pdf'.format(i), transparent=True)
+        fig.savefig(os.path.join(save_dir, '{}_hist.pdf'.format(i)), transparent=True)
 
     from image_classification.quantize import quantize
 
     def plot_each(preconditioner, Preconditioner, name, g):
-        input = g
-        prec = preconditioner(g, num_bits=config.backward_num_bits)
+        # input = g
+        # prec = preconditioner(g, num_bits=config.backward_num_bits)
+
+        prec = Preconditioner(g)
         g = prec.forward()
 
         fig, ax = plt.subplots(figsize=(2.5, 2.5))
-        ax.hist(g.cpu().numpy().ravel(), bins=2 ** config.backward_num_bits - 1, range=[0, 255])
+        ax.hist(g.cpu().numpy().ravel(), bins=num_bins, range=[0, num_bins])
         ax.set_yscale('log')
         ax.set_ylim([1, 1e6])
-        ax.set_xlim([0, 255])
-        ax.set_xticks([0, 255])
+        ax.set_xlim([0, num_bins])
+        ax.set_xticks([0, num_bins])
         l, b, w, h = ax.get_position().bounds
         ax.set_position([l + 0.05 * w, b, 0.95 * w, h])
-        fig.savefig('{}_hist.pdf'.format(name), transparent=True)
+        fig.savefig(os.path.join(save_dir, '{}_hist.pdf'.format(name)), transparent=True)
 
-        prec.zero_point *= 0
-        bin_sizes = []
-        for i in range(128):
-            bin_sizes.append(float(prec.inverse_transform(torch.eye(128)[:, i:i + 1].cuda()).sum()))
-        print(bin_sizes)
-        fig, ax = plt.subplots(figsize=(2.5, 2.5))
-        ax.hist(bin_sizes, bins=50, range=[0, 1e-5])
-        # ax.set_yscale('log')
-        ax.set_xlim([0, 1e-5])
-        ax.set_xticks([0, 1e-5])
-        ax.set_xticklabels(['$0$', '$10^{-5}$'])
-        l, b, w, h = ax.get_position().bounds
-        ax.set_position([l + 0.05 * w, b, 0.95 * w, h])
-        # ax.set_ylim([0, 128])
-        fig.savefig('{}_bin_size_hist.pdf'.format(name), transparent=True)
+        # prec.zero_point *= 0
+        # bin_sizes = []
+        # for i in range(128):
+        #     bin_sizes.append(float(prec.inverse_transform(torch.eye(128)[:, i:i + 1].cuda()).sum()))
+        # print(bin_sizes)
+        # fig, ax = plt.subplots(figsize=(2.5, 2.5))
+        # ax.hist(bin_sizes, bins=50, range=[0, 1e-5])
+        # # ax.set_yscale('log')
+        # ax.set_xlim([0, 1e-5])
+        # ax.set_xticks([0, 1e-5])
+        # ax.set_xticklabels(['$0$', '$10^{-5}$'])
+        # l, b, w, h = ax.get_position().bounds
+        # ax.set_position([l + 0.05 * w, b, 0.95 * w, h])
+        # # ax.set_ylim([0, 128])
+        # fig.savefig('{}_bin_size_hist.pdf'.format(name), transparent=True)
+        #
+        # gs = []
+        # for i in range(10):
+        #     grad = quantize(input, Preconditioner, stochastic=True)
+        #     gs.append(grad.cpu().numpy())
+        # var = np.stack(gs).var(0).sum()
+        # print(var)
 
-        gs = []
-        for i in range(10):
-            grad = quantize(input, Preconditioner, stochastic=True)
-            gs.append(grad.cpu().numpy())
-        var = np.stack(gs).var(0).sum()
-        print(var)
+    from image_classification.preconditioner import ScalarPreconditionerAct
 
-    from image_classification.preconditioner import ScalarPreconditionerAct, DiagonalPreconditioner, \
-        BlockwiseHouseholderPreconditioner
-    plot_each(ScalarPreconditionerAct, lambda x: ScalarPreconditionerAct(x, config.backward_num_bits), 'PTQ', g)
+    plot_each(ScalarPreconditionerAct, lambda x: ScalarPreconditionerAct(x, config.bweight_num_bits), 'PTQ', g)
     # plot_each(DiagonalPreconditioner, lambda x: DiagonalPreconditioner(x, config.backward_num_bits), 'PSQ', g)
     # plot_each(BlockwiseHouseholderPreconditioner,
     #           lambda x: BlockwiseHouseholderPreconditioner(x, config.backward_num_bits), 'BHQ', g)
@@ -653,6 +775,8 @@ def variance_profile(model_and_loss, optimizer, val_loader, prefix='.', num_batc
                            ha="center", va="center")
 
     fig.savefig('variance_profile.pdf')
+
+
 #
 # def get_var(model_and_loss, optimizer, val_loader, num_batches=10000):
 #     if hasattr(model_and_loss.model, 'module'):
@@ -788,5 +912,5 @@ def get_var(model_and_loss, optimizer, val_loader, args=None):
             print('{}, quant var = {:.3e}, quant bias = {:.3e}'.format(k, qg, qb), file=fopen)
     if args.local_rank == 0:
         print('Overall Quant Var = {:.3e}, Quant bias = {:.3e}'
-          .format(all_qg, all_qb), file=fopen)
+              .format(all_qg, all_qb), file=fopen)
     # print("hello world", file=open("20221025/{}/{}/var.txt".format(args.checkpoint_epoch, args.bwbits), 'a'))

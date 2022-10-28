@@ -10,7 +10,7 @@ from . import logger as log
 from . import resnet as models
 from . import utils
 from .debug import dump, fast_dump, plot_bin_hist, write_errors, fast_dump_2, variance_profile, get_var, \
-    plot_weight_hist
+    plot_weight_hist, leverage_score
 import random
 
 try:
@@ -420,8 +420,9 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
         print("calculating variance")
         # fast_dump_2(model_and_loss, optimizer, train_loader, checkpoint_dir)
         # dump(model_and_loss, optimizer, train_loader, checkpoint_dir)
-        # plot_bin_hist(model_and_loss, optimizer, val_loader)
+        # plot_bin_hist(model_and_loss, optimizer, val_loader, args)
+        leverage_score(args)
         # write_errors(model_and_loss, optimizer, debug_loader)
         # variance_profile(model_and_loss, optimizer, debug_loader)
-        get_var(model_and_loss, optimizer, train_loader, args=args)
+        # get_var(model_and_loss, optimizer, train_loader, args=args)
         # plot_weight_hist(model_and_loss, optimizer, train_loader)
