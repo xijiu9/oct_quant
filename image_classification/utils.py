@@ -291,8 +291,12 @@ def checkAbsmean(s, x):
     print(s, x.mean(), x.max(), x.min(), x.abs().mean())
 
 def draw_maxmin(plt_list, cnt_plt, info):
-    plt_path = os.path.join(config.args.workspace, 'plt_list', '{}'.format(config.epoch), '{}.png'.format(info))
-    plt_path_log = os.path.join(config.args.workspace, 'plt_list', '{}'.format(config.epoch), '{}_log.png'.format(info))
+    save_path = os.path.join(config.args.workspace, 'plt_list', '{}'.format(config.epoch))
+    plt_path = os.path.join(save_path, '{}.png'.format(info))
+    plt_path_log = os.path.join(save_path, '{}_log.png'.format(info))
+
+    os.makedirs(save_path, exist_ok=True)
+
     plt.figure(0)
     for idx, plst in enumerate(plt_list[info]):
         maxx, minn = plst[0].cpu(), plst[1].cpu()
@@ -306,6 +310,7 @@ def draw_maxmin(plt_list, cnt_plt, info):
         maxx, minn = plst[0].cpu(), plst[1].cpu()
         plt.scatter(np.log10(maxx.abs() + 1e-10), 2 - idx / len(plt_list[info]), s=1, c='red')
         plt.scatter(-np.log10(minn.abs() + 1e-10), 0 + idx / len(plt_list[info]), s=1, c='blue')
+
     plt.savefig(plt_path_log)
 
     print("{} finish!".format(info))
