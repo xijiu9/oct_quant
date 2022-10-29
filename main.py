@@ -356,8 +356,8 @@ def main(args):
         args.fp16, logger, should_backup_checkpoint(args), use_amp=args.amp,
         batch_size_multiplier=batch_size_multiplier,
         start_epoch=args.start_epoch, best_prec1=best_prec1, prof=args.prof,
-        skip_training=args.evaluate, skip_validation=args.training_only,
-        # skip_training=True, skip_validation=True,
+        # skip_training=args.evaluate, skip_validation=args.training_only,
+        skip_training=True, skip_validation=True,
         save_checkpoints=args.save_checkpoints and not args.evaluate, checkpoint_dir=args.workspace, args=args,
         config=config)
     exp_duration = time.time() - exp_start_time

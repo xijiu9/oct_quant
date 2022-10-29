@@ -489,7 +489,7 @@ def plot_bin_hist(model_and_loss, optimizer, val_loader, args):
         ax.set_xticklabels(['-{:.2e}'.format(mxthres), '$0$', '{:.2e}'.format(mxthres)])
         l, b, w, h = ax.get_position().bounds
         ax.set_position([l + 0.05 * w, b, 0.95 * w, h])
-        fig.savefig(os.path.join(save_dir, '{}_hist.pdf'.format(i)), transparent=True)
+        fig.savefig(os.path.join(save_dir, '{}_hist.png'.format(i)), transparent=True)
 
     from image_classification.quantize import quantize
 
@@ -508,7 +508,7 @@ def plot_bin_hist(model_and_loss, optimizer, val_loader, args):
         ax.set_xticks([0, num_bins])
         l, b, w, h = ax.get_position().bounds
         ax.set_position([l + 0.05 * w, b, 0.95 * w, h])
-        fig.savefig(os.path.join(save_dir, '{}_hist.pdf'.format(name)), transparent=True)
+        fig.savefig(os.path.join(save_dir, '{}_hist.png'.format(name)), transparent=True)
 
         # prec.zero_point *= 0
         # bin_sizes = []
