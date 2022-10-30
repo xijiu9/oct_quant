@@ -22,7 +22,7 @@ parser.add_argument('--training-bit', type=str, default='', help='weight number 
                              'forward4', 'plt'])
 parser.add_argument('--plt-bit', type=str, default='', help='')
 parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
-                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision'])
+                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision', 'checkpoint_full_precision_zero'])
 parser.add_argument('--checkpoint-epoch', type=int, default=0, help='full precision')
 parser.add_argument('--checkpoint_epoch_full_precision', type=int, default=0, help='full precision')
 parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient to 0.01(CIFAR)')
@@ -79,7 +79,7 @@ arg_epochs = 200
 if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoint_from_zero':
     model = 'results/cifar/{}/models/checkpoint-{}.pth.tar'.format(args.training_bit, args.checkpoint_epoch)
     # arg_epochs = 1
-elif args.training_strategy == 'checkpoint_full_precision':
+elif args.training_strategy == 'checkpoint_full_precision' or args.training_strategy == 'checkpoint_full_precision_zero':
     model = 'results/cifar/exact/models/saves/checkpoint-{}.pth.tar'.format(args.checkpoint_epoch)
     # arg_epochs = 1
 else:
@@ -90,13 +90,14 @@ if args.amp:
 else:
     amp_control = ''
 
-os.system("python ./main.py --arch preact_resnet56 --gather-checkpoints --checkpoint-epoch {} \
+os.system("python ./main.py --arch preact_resnet56 --gather-checkpoints --checkpoint-epoch {} --training-strategy {} \
             --lr {} --resume {} --dataset cifar10 --momentum 0.9 --weight-decay {} --epoch {}\
             --warmup {} {}  ~/data/cifar10 --workspace ./results/cifar/{}/models \
             {} --print-freq 300 --clip-grad {} \
             --bbits {} --bwbits {} --abits {} --wbits {} --lsqforward {} \
             --twolayers-gradweight {} --twolayers-gradinputt {}"
-            .format(args.checkpoint_epoch, args.lr, model, args.weight_decay, arg_epochs,
+            .format(args.checkpoint_epoch, args.training-strategy, 
+                    args.lr, model, args.weight_decay, arg_epochs,
                     args.warmup, arg, args.training_bit,
                     amp_control, args.clip_grad,
                     bbits, bwbits, awbits, awbits, args.lsqforward,

@@ -23,7 +23,8 @@ parser.add_argument('--training-bit', type=str, default='', help='weight number 
                              'forward4', 'plt'])
 parser.add_argument('--plt-bit', type=str, default='', help='')
 parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
-                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision'])
+                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero',
+                             'checkpoint_full_precision', 'checkpoint_full_precision_from_zero'])
 parser.add_argument('--checkpoint-epoch', type=int, default=0, help='full precision')
 parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient')
 parser.add_argument('--amp', action='store_true', help='Run model AMP (automatic mixed precision) mode.')
@@ -97,7 +98,7 @@ arg_epochs = args.epochs
 if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoint_from_zero':
     model = 'results/imagenet/{}/models/checkpoint-{}.pth.tar'.format(args.training_bit, args.checkpoint_epoch)
     arg_epochs = 1
-elif args.training_strategy == 'checkpoint_full_precision':
+elif args.training_strategy == 'checkpoint_full_precision' or args.training_strategy == 'checkpoint_full_precision_from_zero':
     model = 'results/imagenet/exact/models/saves/checkpoint-{}.pth.tar'.format(args.checkpoint_epoch)
     arg_epochs = 1
 else:
@@ -109,14 +110,14 @@ else:
     amp_control = ''
 
 os.system("python ./multiproc.py --nnodes 1 --node_rank 0 --master_addr {} --master_port {} \
-            --nproc_per_node {} ./main.py --arch {} --gather-checkpoints --checkpoint-epoch {}\
+            --nproc_per_node {} ./main.py --arch {} --gather-checkpoints --checkpoint-epoch {} --training-strategy {} \
             --batch-size {} --lr {} --optimizer-batch-size {} --resume {}\
             --warmup {} {}  /data/LargeData/Large/ImageNet --workspace ./results/imagenet/{}/models \
             {} --print-freq 400 --clip-grad {} --epochs {}\
             --bbits {} --bwbits {} --abits {} --wbits {} --weight-decay {} --lsqforward {} \
             --twolayers-gradweight {} --twolayers-gradinputt {}"
           .format(args.master_addr, args.master_port,
-                  args.gpu_num, args.arch, args.checkpoint_epoch,
+                  args.gpu_num, args.arch, args.checkpoint_epoch, args.training_strategy, 
                   args.batch_size, args.lr, args.optimizer_batch_size, model,
                   args.warmup, arg, args.training_bit,
                   amp_control, args.clip_grad, arg_epochs,

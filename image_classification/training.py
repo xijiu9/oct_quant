@@ -414,14 +414,14 @@ def train_loop(model_and_loss, optimizer, lr_scheduler, train_loader, val_loader
             logger.end()
     print(valid_history)
     if skip_training:
-        prec1 = validate(val_loader, model_and_loss, fp16, logger, start_epoch, prof=prof,
-                         register_metrics=start_epoch == start_epoch)
-        print("valid acc is {}".format(prec1))
+        # prec1 = validate(val_loader, model_and_loss, fp16, logger, start_epoch, prof=prof,
+        #                  register_metrics=start_epoch == start_epoch)
+        # print("valid acc is {}".format(prec1))
         print("calculating variance")
         # fast_dump_2(model_and_loss, optimizer, train_loader, checkpoint_dir)
         # dump(model_and_loss, optimizer, train_loader, checkpoint_dir)
-        plot_bin_hist(model_and_loss, optimizer, val_loader, args)
-        # leverage_score(args)
+        # plot_bin_hist(model_and_loss, optimizer, val_loader, args)
+        leverage_score(args)
         # write_errors(model_and_loss, optimizer, debug_loader)
         # variance_profile(model_and_loss, optimizer, debug_loader)
         # get_var(model_and_loss, optimizer, train_loader, args=args)

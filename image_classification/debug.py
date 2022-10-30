@@ -11,7 +11,7 @@ from tqdm import tqdm, trange
 import numpy as np
 import pickle
 from matplotlib.colors import LogNorm
-
+import time
 
 def get_error_grad(m):
     grad_dict = {}
@@ -349,6 +349,7 @@ def leverage_score(args):
         load_dir = '20221025/{}/{}/{}'.format(args.dataset, args.checkpoint_epoch,
                                               args.bwbits)
     save_file = open(os.path.join(load_dir, 'leverage.txt'), 'a')
+    clear_file = open(os.path.join(load_dir, 'leverage.txt'), 'w')
 
     PT = torch.load(os.path.join(load_dir, 'tensor.pt'))
     grad_output, grad_input, grad_weight, saved, other_args = PT["grad output"], PT["grad input"], PT["grad weight"], \
@@ -361,18 +362,21 @@ def leverage_score(args):
         True, False, False,  # ?
         [False, True])
     grad_output_8_sum = None
+    grad_output_4_sum = None
     grad_output_2_sum = None
     grad_weight_8_sum = None
+    grad_weight_4_sum = None
     grad_weight_2_sum = None
     num_sample = 5
     for _ in trange(num_sample):
         grad_output_8 = quantize(grad_output, lambda x: ScalarPreconditioner(x, 8), stochastic=True)
+        grad_output_4 = quantize(grad_output, lambda x: ScalarPreconditioner(x, 4), stochastic=True)
         grad_output_2 = quantize(grad_output, lambda x: TwoLayerWeightPreconditioner(x, 4), stochastic=True)
 
         input_sample, grad_output_weight_condi_sample = twolayer_convsample_weight(torch.cat([inputt, inputt], dim=0),
                                                                                    grad_output_2)
         vec_norm, index, norm = twolayer_convsample_weight(torch.cat([inputt, inputt], dim=0),
-                                                                                   grad_output_2, debug=True)
+                                                           grad_output_2, debug=True)
         # grad_weight_2 = grad_output_2.t().mm(torch.cat([inputs, inputs], dim=0))
         _, grad_weight_2 = ext_backward_func.cudnn_convolution_backward(
             input_sample, grad_output_weight_condi_sample, weight, padding, stride, dilation, groups,
@@ -403,32 +407,62 @@ def leverage_score(args):
             inputt, grad_output_8, weight, padding, stride, dilation, groups,
             True, False, False,  # ?
             [False, True])
+
+        _, grad_weight_4 = ext_backward_func.cudnn_convolution_backward(
+            inputt, grad_output_4, weight, padding, stride, dilation, groups,
+            True, False, False,  # ?
+            [False, True])
+
         try:
             grad_weight_2_sum += grad_weight_2 / num_sample
+            grad_weight_4_sum += grad_weight_4 / num_sample
             grad_weight_8_sum += grad_weight_8 / num_sample
             grad_output_2_sum += grad_output_2 / num_sample
+            grad_output_4_sum += grad_output_4 / num_sample
             grad_output_8_sum += grad_output_8 / num_sample
         except:
             grad_weight_2_sum = grad_weight_2 / num_sample
+            grad_weight_4_sum = grad_weight_4 / num_sample
             grad_weight_8_sum = grad_weight_8 / num_sample
             grad_output_2_sum = grad_output_2 / num_sample
+            grad_output_4_sum = grad_output_4 / num_sample
             grad_output_8_sum = grad_output_8 / num_sample
 
+        del grad_weight_2, grad_weight_4, grad_weight_8
+
+    time_tuple = time.localtime(time.time())
+    print('Time {}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}:'
+          .format(time_tuple[0], time_tuple[1], time_tuple[2], time_tuple[3],
+                  time_tuple[4], time_tuple[5]), file=clear_file)
     # print("fake gradient: ", grad_weight_fake.mean(), grad_weight_fake.abs().mean())
-    print("full gradient: ", full_grad_weight.mean().detach().cpu().numpy(), full_grad_weight.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("grad_output:   ", grad_output.mean().detach().cpu().numpy(), grad_output.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("inputs:        ", inputt.mean().detach().cpu().numpy(), inputt.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("full gradient: ", full_grad_weight.mean().detach().cpu().numpy(),
+          full_grad_weight.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("grad_output:   ", grad_output.mean().detach().cpu().numpy(), grad_output.abs().mean().detach().cpu().numpy(),
+          file=save_file)
+    print("inputs:        ", inputt.mean().detach().cpu().numpy(), inputt.abs().mean().detach().cpu().numpy(),
+          file=save_file)
     bias_weight_8 = grad_weight_8_sum - full_grad_weight
     bias_output_8 = grad_output_8_sum - grad_output
-    print("bias_weight_8  ", bias_weight_8.mean().detach().cpu().numpy(), bias_weight_8.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("bias_output_8  ", bias_output_8.mean().detach().cpu().numpy(), bias_output_8.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_weight_8  ", bias_weight_8.mean().detach().cpu().numpy(),
+          bias_weight_8.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_output_8  ", bias_output_8.mean().detach().cpu().numpy(),
+          bias_output_8.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("_________________________________________________________________________________")
+    bias_weight_4 = grad_weight_4_sum - full_grad_weight
+    bias_output_4 = grad_output_4_sum - grad_output
+    print("bias_weight_4  ", bias_weight_4.mean().detach().cpu().numpy(),
+          bias_weight_4.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_output_4  ", bias_output_4.mean().detach().cpu().numpy(),
+          bias_output_4.abs().mean().detach().cpu().numpy(), file=save_file)
     print("_________________________________________________________________________________")
     bias_weight_2 = grad_weight_2_sum - full_grad_weight
     bias_output_2 = grad_output_2_sum[:args.batch_size] + grad_output_2_sum[args.batch_size:] - grad_output
-    print("bias_weight_2  ", bias_weight_2.mean().detach().cpu().numpy(), bias_weight_2.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("bias_output_2  ", bias_output_2.mean().detach().cpu().numpy(), bias_output_2.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_weight_2  ", bias_weight_2.mean().detach().cpu().numpy(),
+          bias_weight_2.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_output_2  ", bias_output_2.mean().detach().cpu().numpy(),
+          bias_output_2.abs().mean().detach().cpu().numpy(), file=save_file)
 
-    print("index: \n", index, file=save_file)
+    print("index: \n", index, 'norm\n', norm, norm.sum(), file=save_file)
 
     vec_norm = vec_norm.sort()[0].detach().cpu().numpy()[::-1]
     sum_norm = [vec_norm[:i].sum() / vec_norm.sum() for i in range(len(vec_norm))]
@@ -443,6 +477,7 @@ def leverage_score(args):
     plt.plot(np.arange(len(vec_norm)), sum_norm)
     plt.savefig(os.path.join(load_dir, 'sum_norm.png'))
 
+    print("calculate over!")
 
 
 def plot_bin_hist(model_and_loss, optimizer, val_loader, args):
