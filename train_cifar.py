@@ -22,7 +22,7 @@ parser.add_argument('--training-bit', type=str, default='', help='weight number 
                              'forward4', 'plt'])
 parser.add_argument('--plt-bit', type=str, default='', help='')
 parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
-                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision', 'checkpoint_full_precision_zero'])
+                    choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision', 'checkpoint_full_precision_from_zero'])
 parser.add_argument('--checkpoint-epoch', type=int, default=0, help='full precision')
 parser.add_argument('--checkpoint_epoch_full_precision', type=int, default=0, help='full precision')
 parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient to 0.01(CIFAR)')

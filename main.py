@@ -138,7 +138,7 @@ def add_parser_arguments(parser):
 
     parser.add_argument('--training-strategy', default='scratch', type=str, metavar='strategy',
                         choices=['scratch', 'checkpoint', 'checkpoint_from_zero', 'checkpoint_full_precision',
-                                 'checkpoint_full_precision_zero'])
+                                 'checkpoint_full_precision_from_zero'])
 
     def str2bool(v):
         if isinstance(v, bool):
@@ -265,7 +265,7 @@ def main(args):
             optimizer_state = checkpoint['optimizer']
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
-            if args.training_strategy == 'checkpoint_from_zero' or args.training_strategy == 'checkpoint_full_precision_zero':
+            if args.training_strategy == 'checkpoint_from_zero' or args.training_strategy == 'checkpoint_full_precision_from_zero':
                 args.start_epoch = 0
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
