@@ -144,30 +144,12 @@ class TwoLayerWeightPreconditioner(Preconditioner):
 
         if torch.isnan(self.scale1):
             torch.save(x, 'image_classification/ckpt/precon1x.pt')
-            print("save for 1")
-            print(mx, mn, iqzero, 'precon 1 bug')
-            with torch.no_grad():
-                mn = min(x.min() - 1e-8, 0)
-                mx = max(x.max() + 1e-8, 0)
-            print("precon1 bug mn is {}, mx is {}".format(mn, mx))
-            self.zero_point1 = mn
-            self.scale1 = self.num_bins / (mx - mn)
-            print("precon1 bug scale1 is {}".format(self.scale1))
-
-            qzero = -self.zero_point1 * self.scale1
-            iqzero = torch.floor(qzero)
-
-            if iqzero <= 0:
-                print("part 1 break, x is {}, iqzero is {} \n".format(x, iqzero))
-
-            mx = (iqzero - self.num_bins) * mn / iqzero
-            self.scale1 = self.num_bins / (mx - mn)
-
+            print("NAN 1")
 
         first_transform = (x - self.zero_point1) * self.scale1
+        first_ckpt = first_transform.clone()
         first_transform.clamp_(0.0, self.num_bins).round_()
         first_quantize = first_transform / self.scale1 + self.zero_point1
-
 
         residual = x - first_quantize
 
@@ -198,28 +180,13 @@ class TwoLayerWeightPreconditioner(Preconditioner):
 
         if torch.isnan(self.scale2):
             torch.save(x, 'image_classification/ckpt/precon2x.pt')
-            print("save for 2")
-            # torch.save(x, 'image_classification/ckpt/precon.pt')
-            with torch.no_grad():
-                mn = min(residual.min() - 1e-8, 0)
-                mx = max(residual.max() + 1e-8, 0)
-
-            print('precon2 bug', mn, mx, "mn, mx")
-            self.zero_point2 = mn
-            self.scale2 = self.num_bins / (mx - mn)
-
-            qzero = -self.zero_point2 * self.scale2
-            iqzero = torch.floor(qzero)
-
-            print('precon2', qzero, iqzero, "qzero, iqzero")
-            if iqzero <= 0:
-                print("part 2 break, x is {}, iqzero is {} \n".format(x, iqzero))
-
-            mx = (iqzero - self.num_bins) * mn / iqzero
-            self.scale2 = self.num_bins / (mx - mn)
+            print("NAN 2")
 
         second_transform = (residual - self.zero_point2) * self.scale2
-        output = torch.cat([first_transform, second_transform], dim=0)
+        second_ckpt = second_transform.clone()
+        second_transform.clamp_(0.0, self.num_bins).round_()
+
+        output = torch.cat([first_ckpt, second_ckpt], dim=0)
         # print("the integer is {}".format(output))
         # print("quantize shape is {}".format(output.shape))
 

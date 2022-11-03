@@ -335,25 +335,37 @@ def fast_dump_2(model_and_loss, optimizer, val_loader, checkpoint_dir):
             sample_var, quant_var, sample_var + quant_var))
 
 
-def leverage_score(args):
+def leverage_score(model_and_loss, optimizer, val_loader, args):
     import actnn.cpp_extension.backward_func as ext_backward_func
     from image_classification.quantize import quantize
     from image_classification.utils import twolayer_convsample_weight
     from image_classification.preconditioner import ScalarPreconditioner, TwoLayerWeightPreconditioner
 
-    torch.set_printoptions(profile="full", linewidth=160)
+    # torch.set_printoptions(profile="full", linewidth=160)
 
     if config.args.twolayers_gradweight:
         load_dir = '20221025/{}/{}/grad_weight'.format(args.dataset, args.checkpoint_epoch)
     else:
-        load_dir = '20221025/{}/{}/{}'.format(args.dataset, args.checkpoint_epoch,
-                                              args.bwbits)
+        load_dir = '20221025/{}/{}/{}'.format(args.dataset, args.checkpoint_epoch, args.bwbits)
     save_file = open(os.path.join(load_dir, 'leverage.txt'), 'a')
     clear_file = open(os.path.join(load_dir, 'leverage.txt'), 'w')
 
-    PT = torch.load(os.path.join(load_dir, 'tensor.pt'))
-    grad_output, grad_input, grad_weight, saved, other_args = PT["grad output"], PT["grad input"], PT["grad weight"], \
+    config.grads = []
+    config.acts = []
+    data_iter = enumerate(val_loader)
+    for i, (input, target) in data_iter:
+        break
+
+    input = input[:args.batch_size]
+    target = target[:args.batch_size]
+    loss, output = model_and_loss(input, target)
+    optimizer.zero_grad()
+    loss.backward()
+    torch.cuda.synchronize()
+    PT = config.grads[10]
+    grad_output, grad_input, _, saved, other_args = PT["grad output"], PT["grad input"], PT["grad weight"], \
                                                               PT["saved"], PT["other args"]
+
     inputt, weight, bias = saved
     stride, padding, dilation, groups = other_args
 
@@ -361,13 +373,14 @@ def leverage_score(args):
         inputt, grad_output, weight, padding, stride, dilation, groups,
         True, False, False,  # ?
         [False, True])
-    grad_output_8_sum = None
-    grad_output_4_sum = None
-    grad_output_2_sum = None
-    grad_weight_8_sum = None
-    grad_weight_4_sum = None
-    grad_weight_2_sum = None
-    num_sample = 5
+
+    def var(x, x_full):
+        try:
+            return (x - x_full).square().sum()
+        except:
+            return (x[:args.batch_size] + x[args.batch_size:] - x_full).square().sum()
+
+    num_sample = 10
     for _ in trange(num_sample):
         grad_output_8 = quantize(grad_output, lambda x: ScalarPreconditioner(x, 8), stochastic=True)
         grad_output_4 = quantize(grad_output, lambda x: ScalarPreconditioner(x, 4), stochastic=True)
@@ -378,27 +391,31 @@ def leverage_score(args):
         vec_norm, index, norm = twolayer_convsample_weight(torch.cat([inputt, inputt], dim=0),
                                                            grad_output_2, debug=True)
         # grad_weight_2 = grad_output_2.t().mm(torch.cat([inputs, inputs], dim=0))
-        _, grad_weight_2 = ext_backward_func.cudnn_convolution_backward(
-            input_sample, grad_output_weight_condi_sample, weight, padding, stride, dilation, groups,
-            True, False, False,  # ?
-            [False, True])
+
+        # print(grad_output_4 == grad_output_weight_condi_sample)
+        # exit(0)
+        # _, grad_weight_2 = ext_backward_func.cudnn_convolution_backward(
+        #     input_sample, grad_output_weight_condi_sample, weight, padding, stride, dilation, groups,
+        #     True, False, False,  # ?
+        #     [False, True])
 
         # brute force
-        # input_2 = torch.cat([inputt, inputt], dim=0)
-        # new_grad_weight = full_grad_weight.unsqueeze(0).repeat(input_2.shape[0], 1, 1, 1, 1)
-        # for i in range(input_2.shape[0]):
-        #     g2i, i2i = grad_output_2[i].unsqueeze(0), input_2[i].unsqueeze(0)
-        #     _, grad_weight_2_i = ext_backward_func.cudnn_convolution_backward(
-        #         i2i, g2i, weight, padding, stride, dilation, groups,
-        #         True, False, False,  # ?
-        #         [False, True])
-        #     new_grad_weight[i] = grad_weight_2_i
-        #
-        # new_norm, new_abs_norm = new_grad_weight.sum(dim=(1, 2, 3, 4)), new_grad_weight.abs().sum(dim=(1, 2, 3, 4))
-        # index = new_abs_norm.sort()[1]
-        # # index = index[input_2.shape[0] // 2:]
-        # index = index[100:]
-        # grad_weight_2 = new_grad_weight[index].sum(dim=0)
+        input_2 = torch.cat([inputt, inputt], dim=0)
+        new_grad_weight = full_grad_weight.unsqueeze(0).repeat(input_2.shape[0], 1, 1, 1, 1)
+        for i in range(input_2.shape[0]):
+            g2i, i2i = grad_output_2[i].unsqueeze(0), input_2[i].unsqueeze(0)
+            _, grad_weight_2_i = ext_backward_func.cudnn_convolution_backward(
+                i2i, g2i, weight, padding, stride, dilation, groups,
+                True, False, False,  # ?
+                [False, True])
+            new_grad_weight[i] = grad_weight_2_i
+
+        new_norm, new_abs_norm = new_grad_weight.sum(dim=(1, 2, 3, 4)), new_grad_weight.abs().sum(dim=(1, 2, 3, 4))
+        index = new_abs_norm.sort()[1]
+        # index = index[input_2.shape[0] // 2:]
+        index = index[args.batch_size:]
+        grad_weight_2 = new_grad_weight[index].sum(dim=0)
+        norm = new_abs_norm
         #
         # print(new_norm.sort()[0], new_abs_norm.sort()[0])
         # exit(0)
@@ -420,6 +437,14 @@ def leverage_score(args):
             grad_output_2_sum += grad_output_2 / num_sample
             grad_output_4_sum += grad_output_4 / num_sample
             grad_output_8_sum += grad_output_8 / num_sample
+
+            grad_weight_2_var_sum += var(grad_weight_2, full_grad_weight) / num_sample
+            grad_weight_4_var_sum += var(grad_weight_4, full_grad_weight) / num_sample
+            grad_weight_8_var_sum += var(grad_weight_8, full_grad_weight) / num_sample
+            grad_output_2_var_sum += var(grad_output_2, grad_output) / num_sample
+            grad_output_4_var_sum += var(grad_output_4, grad_output) / num_sample
+            grad_output_8_var_sum += var(grad_output_8, grad_output) / num_sample
+
         except:
             grad_weight_2_sum = grad_weight_2 / num_sample
             grad_weight_4_sum = grad_weight_4 / num_sample
@@ -428,39 +453,44 @@ def leverage_score(args):
             grad_output_4_sum = grad_output_4 / num_sample
             grad_output_8_sum = grad_output_8 / num_sample
 
-        del grad_weight_2, grad_weight_4, grad_weight_8
+            grad_weight_2_var_sum = var(grad_weight_2, full_grad_weight) / num_sample
+            grad_weight_4_var_sum = var(grad_weight_4, full_grad_weight) / num_sample
+            grad_weight_8_var_sum = var(grad_weight_8, full_grad_weight) / num_sample
+            grad_output_2_var_sum = var(grad_output_2, grad_output) / num_sample
+            grad_output_4_var_sum = var(grad_output_4, grad_output) / num_sample
+            grad_output_8_var_sum = var(grad_output_8, grad_output) / num_sample
+
+    def C(x):
+        return x.mean().detach().cpu().numpy(), x.abs().mean().detach().cpu().numpy()
 
     time_tuple = time.localtime(time.time())
-    print('Time {}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}:'
+    print('Time {}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}:\n'
           .format(time_tuple[0], time_tuple[1], time_tuple[2], time_tuple[3],
                   time_tuple[4], time_tuple[5]), file=clear_file)
     # print("fake gradient: ", grad_weight_fake.mean(), grad_weight_fake.abs().mean())
-    print("full gradient: ", full_grad_weight.mean().detach().cpu().numpy(),
-          full_grad_weight.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("grad_output:   ", grad_output.mean().detach().cpu().numpy(), grad_output.abs().mean().detach().cpu().numpy(),
-          file=save_file)
-    print("inputs:        ", inputt.mean().detach().cpu().numpy(), inputt.abs().mean().detach().cpu().numpy(),
-          file=save_file)
+    print("full gradient: ", C(full_grad_weight), file=save_file)
+    print("grad_output:   ", C(grad_output), file=save_file)
+    print("inputs:        ", C(inputt), file=save_file)
     bias_weight_8 = grad_weight_8_sum - full_grad_weight
     bias_output_8 = grad_output_8_sum - grad_output
-    print("bias_weight_8  ", bias_weight_8.mean().detach().cpu().numpy(),
-          bias_weight_8.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("bias_output_8  ", bias_output_8.mean().detach().cpu().numpy(),
-          bias_output_8.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("_________________________________________________________________________________")
+    print("bias_weight_8  ", C(bias_weight_8), file=save_file)
+    print("bias_output_8  ", C(bias_output_8), file=save_file)
+    print("vari_weight_8  ", C(grad_weight_8_var_sum), file=save_file)
+    print("vari_output_8  ", C(grad_output_8_var_sum), file=save_file)
+    print("_________________________________________________________________________________", file=save_file)
     bias_weight_4 = grad_weight_4_sum - full_grad_weight
     bias_output_4 = grad_output_4_sum - grad_output
-    print("bias_weight_4  ", bias_weight_4.mean().detach().cpu().numpy(),
-          bias_weight_4.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("bias_output_4  ", bias_output_4.mean().detach().cpu().numpy(),
-          bias_output_4.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("_________________________________________________________________________________")
+    print("bias_weight_4  ", C(bias_weight_4), file=save_file)
+    print("bias_output_4  ", C(bias_output_4), file=save_file)
+    print("vari_weight_4  ", C(grad_weight_4_var_sum), file=save_file)
+    print("vari_output_4  ", C(grad_output_4_var_sum), file=save_file)
+    print("_________________________________________________________________________________", file=save_file)
     bias_weight_2 = grad_weight_2_sum - full_grad_weight
     bias_output_2 = grad_output_2_sum[:args.batch_size] + grad_output_2_sum[args.batch_size:] - grad_output
-    print("bias_weight_2  ", bias_weight_2.mean().detach().cpu().numpy(),
-          bias_weight_2.abs().mean().detach().cpu().numpy(), file=save_file)
-    print("bias_output_2  ", bias_output_2.mean().detach().cpu().numpy(),
-          bias_output_2.abs().mean().detach().cpu().numpy(), file=save_file)
+    print("bias_weight_2  ", C(bias_weight_2), file=save_file)
+    print("bias_output_2  ", C(bias_output_2), file=save_file)
+    print("vari_weight_2  ", C(grad_weight_2_var_sum), file=save_file)
+    print("vari_output_2  ", C(grad_output_2_var_sum), file=save_file)
 
     print("index: \n", index, 'norm\n', norm, norm.sum(), file=save_file)
 

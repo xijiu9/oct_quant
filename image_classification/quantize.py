@@ -92,8 +92,6 @@ class conv2d_act(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        if config.grads is not None:
-            config.grads.append(grad_output.detach())
         # checkNAN(grad_output, 'grad_out')
         # if torch.isnan(grad_output[0, 0, 0, 0]):
         #     print("Linear De")
@@ -163,6 +161,14 @@ class conv2d_act(Function):
         # print("already saved")
         # exit(0)
         # checkNAN(grad_input, 'grad_input')
+
+        if config.grads is not None:
+            config.grads.append({"grad output": grad_output.detach(),
+                                 "grad input": grad_input.detach(),
+                                 "grad weight": grad_weight.detach(),
+                                 "saved": ctx.saved,
+                                 "other args": ctx.other_args})
+
         return grad_input, grad_weight, grad_bias, None, None, None, None
 
 
@@ -466,16 +472,17 @@ if __name__ == '__main__':
 
     the_type = "180"
     torch.set_printoptions(profile="full", linewidth=160)
-    
+
     if config.args.twolayers_gradweight:
         save_dir = '20221025/{}/{}/grad_weight/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch)
     else:
-        save_dir = '20221025/{}/{}/{}/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch, config.args.bwbits)
+        save_dir = '20221025/{}/{}/{}/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch,
+                                                        config.args.bwbits)
 
     PT = torch.load("")
 
     grad_output, grad_input, grad_weight, saved, other_args = PT["grad output"], PT["grad input"], PT["grad weight"], \
-                                                              PT["saved"]. PT["other args"]
+                                                              PT["saved"].PT["other args"]
 
     input, weight, bias = ctx.saved
     stride, padding, dilation, groups = ctx.other_args

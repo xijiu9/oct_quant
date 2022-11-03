@@ -81,7 +81,7 @@ if args.training_strategy == 'checkpoint' or args.training_strategy == 'checkpoi
     # arg_epochs = 1
 elif args.training_strategy == 'checkpoint_full_precision' or args.training_strategy == 'checkpoint_full_precision_zero':
     model = 'results/cifar/exact/models/saves/checkpoint-{}.pth.tar'.format(args.checkpoint_epoch)
-    # arg_epochs = 1
+    arg_epochs = 1
 else:
     model = 'pass'
 
@@ -96,7 +96,7 @@ os.system("python ./main.py --arch preact_resnet56 --gather-checkpoints --checkp
             {} --print-freq 300 --clip-grad {} \
             --bbits {} --bwbits {} --abits {} --wbits {} --lsqforward {} \
             --twolayers-gradweight {} --twolayers-gradinputt {}"
-            .format(args.checkpoint_epoch, args.training-strategy, 
+            .format(args.checkpoint_epoch, args.training_strategy,
                     args.lr, model, args.weight_decay, arg_epochs,
                     args.warmup, arg, args.training_bit,
                     amp_control, args.clip_grad,

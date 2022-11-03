@@ -186,6 +186,9 @@ def twolayer_convsample_weight(m1, m2, debug=False):
     if debug:
         return vec_norm, index, norm_x
 
+    # m1, m2 = m1[:m1.shape[0] // 2], m2[:m2.shape[0] // 2]
+    # if debug:
+    #     return None, None, None
     return m1, m2
 
 
