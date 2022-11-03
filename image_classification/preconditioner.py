@@ -186,7 +186,7 @@ class TwoLayerWeightPreconditioner(Preconditioner):
         second_ckpt = second_transform.clone()
         second_transform.clamp_(0.0, self.num_bins).round_()
 
-        output = torch.cat([first_ckpt, second_ckpt], dim=0)
+        output = torch.cat([first_transform, second_transform], dim=0)
         # print("the integer is {}".format(output))
         # print("quantize shape is {}".format(output.shape))
 
