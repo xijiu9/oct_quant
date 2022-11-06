@@ -1,3 +1,4 @@
+import math
 from collections import namedtuple
 import torch
 import torch.nn as nn
@@ -9,18 +10,19 @@ import matplotlib.pyplot as plt
 import actnn.cpp_extension.backward_func as ext_backward_func
 import numpy as np
 from tqdm import trange
-from image_classification.utils import config
 
 try:
+    from image_classification.utils import config
     from image_classification.preconditioner import ScalarPreconditioner, ScalarPreconditionerAct, \
-        TwoLayerWeightPreconditioner, lsq_per_tensor
+        TwoLayerWeightPreconditioner, lsq_per_tensor, LUQPreconditioner
     from image_classification.utils import twolayer_linearsample_weight, twolayer_convsample_weight, \
         twolayer_linearsample_input, twolayer_convsample_input, checkNAN, checkAbsmean, cnt_plt, list_plt, draw_maxmin
 except:
+    from utils import config
     from utils import twolayer_linearsample_weight, twolayer_convsample_weight, sample_index_from_bernouli, \
         twolayer_linearsample_input, twolayer_convsample_input, checkNAN, checkAbsmean
-    from preconditioner import ScalarPreconditioner, DiagonalPreconditioner, \
-        BlockwiseHouseholderPreconditioner, ScalarPreconditionerAct, TwoLayerWeightPreconditioner, lsq_per_tensor
+    from preconditioner import ScalarPreconditioner, ScalarPreconditionerAct, TwoLayerWeightPreconditioner, \
+        lsq_per_tensor, LUQPreconditioner
 
 QParams = namedtuple('QParams', ['range', 'zero_point', 'num_bits'])
 
@@ -47,11 +49,17 @@ class UniformQuantize(InplaceFunction):
         with torch.no_grad():
             preconditioner = Preconditioner(output)
             output = preconditioner.forward()
-
+            # print("quantize 1", output)
             if stochastic:
                 noise = output.new(output.shape).uniform_(-0.5, 0.5)
                 output.add_(noise)
+                # print("quantize 2", output)
+                if config.luq:
+                    log_bias = math.log2(4 / 3) - 1 / 2
+                    output.add_(torch.ones_like(output) * log_bias)
+                    # print("quantize 3", output)
             # quantize
+
             output.clamp_(0.0, preconditioner.num_bins).round_()
 
             inverse_output = preconditioner.inverse(output)
@@ -65,6 +73,9 @@ class UniformQuantize(InplaceFunction):
             #     cnt_plt[info] += 1
             #     draw_maxmin(list_plt, cnt_plt, info)
 
+            # print(input[0, 0, -5:, :5], '\n\n', inverse_output[0, 0, -5:, :5])
+            # print(Preconditioner)
+            # exit(0)
         # if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
         #     print(output.view(-1)[:10])
         if not debug:
@@ -103,10 +114,10 @@ class conv2d_act(Function):
 
         grad_output_active_condi = quantize(grad_output, config.activation_gradient_preconditioner(),
                                             stochastic=True, info='conv_active')
-
         input, weight, bias = ctx.saved
         stride, padding, dilation, groups = ctx.other_args
 
+        # exit(0)
         # torch.save(
         #     {"input": input, "weight": weight, "bias": bias, "stride": stride, "padding": padding, "dilation": dilation
         #         , "groups": groups}, 'image_classification/ckpt/inputs_conv_180.pt')
@@ -468,102 +479,102 @@ class QBatchNorm2D(nn.BatchNorm2d):
 #     print("bias_weight_2  ", bias_weight_2.mean(), bias_weight_2.abs().mean())
 #     print("bias_output_2  ", bias_output_2.mean(), bias_output_2.abs().mean())
 
-if __name__ == '__main__':
-
-    the_type = "180"
-    torch.set_printoptions(profile="full", linewidth=160)
-
-    if config.args.twolayers_gradweight:
-        save_dir = '20221025/{}/{}/grad_weight/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch)
-    else:
-        save_dir = '20221025/{}/{}/{}/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch,
-                                                        config.args.bwbits)
-
-    PT = torch.load("")
-
-    grad_output, grad_input, grad_weight, saved, other_args = PT["grad output"], PT["grad input"], PT["grad weight"], \
-                                                              PT["saved"].PT["other args"]
-
-    input, weight, bias = ctx.saved
-    stride, padding, dilation, groups = ctx.other_args
-
-    _, full_grad_weight = ext_backward_func.cudnn_convolution_backward(
-        inputt, grad_output, weight, padding, stride, dilation, groups,
-        True, False, False,  # ?
-        [False, True])
-    grad_output_8_sum = None
-    grad_output_2_sum = None
-    grad_weight_8_sum = None
-    grad_weight_2_sum = None
-    num_sample = 1
-    for i in trange(num_sample):
-        grad_output_8 = quantize(grad_output, lambda x: ScalarPreconditioner(x, 8), stochastic=True)
-        grad_output_2 = quantize(grad_output, lambda x: TwoLayerWeightPreconditioner(x, 4), stochastic=True)
-
-        input_sample, grad_output_weight_condi_sample = twolayer_convsample(torch.cat([inputt, inputt], dim=0),
-                                                                            grad_output_2, epoch=0)
-        input_sample_debug, grad_output_weight_condi_sample_debug = twolayer_convsample_debug(
-            torch.cat([inputt, inputt], dim=0),
-            grad_output_2, epoch=int(the_type))
-        # grad_weight_2 = grad_output_2.t().mm(torch.cat([inputs, inputs], dim=0))
-        _, grad_weight_2 = ext_backward_func.cudnn_convolution_backward(
-            input_sample, grad_output_weight_condi_sample, weight, padding, stride, dilation, groups,
-            True, False, False,  # ?
-            [False, True])
-        _, grad_weight_2_d = ext_backward_func.cudnn_convolution_backward(
-            input_sample_debug, grad_output_weight_condi_sample_debug, weight, padding, stride, dilation, groups,
-            True, False, False,  # ?
-            [False, True])
-        # brute force
-        # input_2 = torch.cat([inputt, inputt], dim=0)
-        # new_grad_weight = full_grad_weight.unsqueeze(0).repeat(input_2.shape[0], 1, 1, 1, 1)
-        # for i in range(input_2.shape[0]):
-        #     g2i, i2i = grad_output_2[i].unsqueeze(0), input_2[i].unsqueeze(0)
-        #     _, grad_weight_2_i = ext_backward_func.cudnn_convolution_backward(
-        #         i2i, g2i, weight, padding, stride, dilation, groups,
-        #         True, False, False,  # ?
-        #         [False, True])
-        #     new_grad_weight[i] = grad_weight_2_i
-        #
-        # new_norm, new_abs_norm = new_grad_weight.sum(dim=(1, 2, 3, 4)), new_grad_weight.abs().sum(dim=(1, 2, 3, 4))
-        # index = new_abs_norm.sort()[1]
-        # # index = index[input_2.shape[0] // 2:]
-        # index = index[100:]
-        # grad_weight_2 = new_grad_weight[index].sum(dim=0)
-        #
-        # print(new_norm.sort()[0], new_abs_norm.sort()[0])
-        # exit(0)
-
-        _, grad_weight_8 = ext_backward_func.cudnn_convolution_backward(
-            inputt, grad_output_8, weight, padding, stride, dilation, groups,
-            True, False, False,  # ?
-            [False, True])
-        try:
-            grad_weight_2_sum += grad_weight_2 / num_sample
-            grad_weight_8_sum += grad_weight_8 / num_sample
-            grad_output_2_sum += grad_output_2 / num_sample
-            grad_output_8_sum += grad_output_8 / num_sample
-        except:
-            grad_weight_2_sum = grad_weight_2 / num_sample
-            grad_weight_8_sum = grad_weight_8 / num_sample
-            grad_output_2_sum = grad_output_2 / num_sample
-            grad_output_8_sum = grad_output_8 / num_sample
-
-    # print("fake gradient: ", grad_weight_fake.mean(), grad_weight_fake.abs().mean())
-    print("full gradient: ", full_grad_weight.mean(), full_grad_weight.abs().mean())
-    print("grad_output:   ", grad_output.mean(), grad_output.abs().mean())
-    print("inputs:        ", inputt.mean(), inputt.abs().mean())
-    bias_weight_8 = grad_weight_8_sum - full_grad_weight
-    bias_output_8 = grad_output_8_sum - grad_output
-    print("bias_weight_8  ", bias_weight_8.mean(), bias_weight_8.abs().mean())
-    print("bias_output_8  ", bias_output_8.mean(), bias_output_8.abs().mean())
-    print("_________________________________________________________________________________")
-    bias_weight_2 = grad_weight_2_sum - full_grad_weight
-    bias_output_2 = grad_output_2_sum[:128] + grad_output_2_sum[128:] - grad_output
-    print("bias_weight_2  ", bias_weight_2.mean(), bias_weight_2.abs().mean())
-    print("bias_output_2  ", bias_output_2.mean(), bias_output_2.abs().mean())
-    bias_weight_2_d = grad_weight_2_d - full_grad_weight
-    print("bias_weight_2d ", bias_weight_2_d.mean(), bias_weight_2_d.abs().mean())
+# if __name__ == '__main__':
+#
+# the_type = "180"
+# torch.set_printoptions(profile="full", linewidth=160)
+#
+# if config.args.twolayers_gradweight:
+#     save_dir = '20221025/{}/{}/grad_weight/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch)
+# else:
+#     save_dir = '20221025/{}/{}/{}/tensor.pt'.format(config.args.dataset, config.args.checkpoint_epoch,
+#                                                     config.args.bwbits)
+#
+# PT = torch.load("")
+#
+# grad_output, grad_input, grad_weight, saved, other_args = PT["grad output"], PT["grad input"], PT["grad weight"], \
+#                                                           PT["saved"].PT["other args"]
+#
+# input, weight, bias = ctx.saved
+# stride, padding, dilation, groups = ctx.other_args
+#
+# _, full_grad_weight = ext_backward_func.cudnn_convolution_backward(
+#     inputt, grad_output, weight, padding, stride, dilation, groups,
+#     True, False, False,  # ?
+#     [False, True])
+# grad_output_8_sum = None
+# grad_output_2_sum = None
+# grad_weight_8_sum = None
+# grad_weight_2_sum = None
+# num_sample = 1
+# for i in trange(num_sample):
+#     grad_output_8 = quantize(grad_output, lambda x: ScalarPreconditioner(x, 8), stochastic=True)
+#     grad_output_2 = quantize(grad_output, lambda x: TwoLayerWeightPreconditioner(x, 4), stochastic=True)
+#
+#     input_sample, grad_output_weight_condi_sample = twolayer_convsample(torch.cat([inputt, inputt], dim=0),
+#                                                                         grad_output_2, epoch=0)
+#     input_sample_debug, grad_output_weight_condi_sample_debug = twolayer_convsample_debug(
+#         torch.cat([inputt, inputt], dim=0),
+#         grad_output_2, epoch=int(the_type))
+#     # grad_weight_2 = grad_output_2.t().mm(torch.cat([inputs, inputs], dim=0))
+#     _, grad_weight_2 = ext_backward_func.cudnn_convolution_backward(
+#         input_sample, grad_output_weight_condi_sample, weight, padding, stride, dilation, groups,
+#         True, False, False,  # ?
+#         [False, True])
+#     _, grad_weight_2_d = ext_backward_func.cudnn_convolution_backward(
+#         input_sample_debug, grad_output_weight_condi_sample_debug, weight, padding, stride, dilation, groups,
+#         True, False, False,  # ?
+#         [False, True])
+#     # brute force
+#     # input_2 = torch.cat([inputt, inputt], dim=0)
+#     # new_grad_weight = full_grad_weight.unsqueeze(0).repeat(input_2.shape[0], 1, 1, 1, 1)
+#     # for i in range(input_2.shape[0]):
+#     #     g2i, i2i = grad_output_2[i].unsqueeze(0), input_2[i].unsqueeze(0)
+#     #     _, grad_weight_2_i = ext_backward_func.cudnn_convolution_backward(
+#     #         i2i, g2i, weight, padding, stride, dilation, groups,
+#     #         True, False, False,  # ?
+#     #         [False, True])
+#     #     new_grad_weight[i] = grad_weight_2_i
+#     #
+#     # new_norm, new_abs_norm = new_grad_weight.sum(dim=(1, 2, 3, 4)), new_grad_weight.abs().sum(dim=(1, 2, 3, 4))
+#     # index = new_abs_norm.sort()[1]
+#     # # index = index[input_2.shape[0] // 2:]
+#     # index = index[100:]
+#     # grad_weight_2 = new_grad_weight[index].sum(dim=0)
+#     #
+#     # print(new_norm.sort()[0], new_abs_norm.sort()[0])
+#     # exit(0)
+#
+#     _, grad_weight_8 = ext_backward_func.cudnn_convolution_backward(
+#         inputt, grad_output_8, weight, padding, stride, dilation, groups,
+#         True, False, False,  # ?
+#         [False, True])
+#     try:
+#         grad_weight_2_sum += grad_weight_2 / num_sample
+#         grad_weight_8_sum += grad_weight_8 / num_sample
+#         grad_output_2_sum += grad_output_2 / num_sample
+#         grad_output_8_sum += grad_output_8 / num_sample
+#     except:
+#         grad_weight_2_sum = grad_weight_2 / num_sample
+#         grad_weight_8_sum = grad_weight_8 / num_sample
+#         grad_output_2_sum = grad_output_2 / num_sample
+#         grad_output_8_sum = grad_output_8 / num_sample
+#
+# # print("fake gradient: ", grad_weight_fake.mean(), grad_weight_fake.abs().mean())
+# print("full gradient: ", full_grad_weight.mean(), full_grad_weight.abs().mean())
+# print("grad_output:   ", grad_output.mean(), grad_output.abs().mean())
+# print("inputs:        ", inputt.mean(), inputt.abs().mean())
+# bias_weight_8 = grad_weight_8_sum - full_grad_weight
+# bias_output_8 = grad_output_8_sum - grad_output
+# print("bias_weight_8  ", bias_weight_8.mean(), bias_weight_8.abs().mean())
+# print("bias_output_8  ", bias_output_8.mean(), bias_output_8.abs().mean())
+# print("_________________________________________________________________________________")
+# bias_weight_2 = grad_weight_2_sum - full_grad_weight
+# bias_output_2 = grad_output_2_sum[:128] + grad_output_2_sum[128:] - grad_output
+# print("bias_weight_2  ", bias_weight_2.mean(), bias_weight_2.abs().mean())
+# print("bias_output_2  ", bias_output_2.mean(), bias_output_2.abs().mean())
+# bias_weight_2_d = grad_weight_2_d - full_grad_weight
+# print("bias_weight_2d ", bias_weight_2_d.mean(), bias_weight_2_d.abs().mean())
 
 # if __name__ == '__main__':
 #     print(1)
@@ -591,3 +602,43 @@ if __name__ == '__main__':
 #
 #     # print(toint(qinput))
 #     print(toint(qweight))
+
+if __name__ == '__main__':
+    torch.set_printoptions(profile="full", linewidth=160)
+    inputt = torch.tensor(
+        [[2.4400e-06, -3.9450e-07, -1.2684e-06, -1.2115e-06, -6.9947e-07, 1.1623e-05, 1.5132e-06, -1.1034e-06, -1.7930e-06, -5.0064e-06],
+         [1.6742e-06, 2.1314e-07, -4.2805e-07, 2.6118e-06, -8.7015e-07, 4.9531e-07, -7.5636e-07, 1.1303e-06, 7.0934e-06, 4.3505e-06],
+         [6.0909e-07, -1.2684e-06, -1.5529e-06, 6.8081e-07, 2.7288e-07, 3.9918e-07, 7.0300e-07, 7.0300e-07, 4.0886e-07, 6.3643e-07],
+         [-5.2879e-07, -3.0121e-07, 2.1083e-07, -5.8568e-07, -9.8394e-07, -9.8394e-07, -1.3053e-07, -2.4432e-07, -4.7189e-07, -5.2879e-07],
+         [-4.1500e-07, -8.7015e-07, -4.1500e-07, -7.5636e-07, -8.1326e-07, -7.5636e-07, -4.7189e-07, -5.2879e-07, -5.2879e-07, -5.8568e-07],
+         [6.7491e-08, -1.0319e-07, 4.0886e-07, -4.6297e-08, -9.5660e-07, -1.0319e-07, 7.5022e-07, -1.2115e-06, -8.7015e-07, -1.1546e-06],
+         [2.9507e-07, 5.5220e-07, 3.8152e-07, -8.7015e-07, -8.8719e-07, 1.8128e-07, -7.5636e-07, -1.8742e-07, 6.0909e-07, -3.0121e-07],
+         [1.1234e-06, -1.0408e-06, -1.1546e-06, 1.1872e-06, 1.4756e-06, -1.4391e-06, -3.5012e-07, 7.9575e-07, 7.6673e-07, 1.8128e-07],
+         [5.1289e-05, 1.0626e-04, 7.3973e-05, 7.5792e-05, 5.8660e-05, 1.8117e-04, 1.5860e-04, 1.0397e-04, 6.1414e-05, 3.8574e-05],
+         [9.2090e-07, 7.5022e-07, -1.3253e-06, -1.4960e-06, 9.2090e-07, 7.5022e-07, 4.6575e-07, -1.9479e-07, -1.3253e-06, 4.9761e-07]],
+        device='cuda:0')
+    config.luq = True
+
+    # T = quantize(inputt, lambda x: LUQPreconditioner(x, 4), stochastic=True)
+
+    sample_num = 10000
+    T_sum = torch.zeros_like(inputt)
+    for _ in trange(sample_num):
+        T = quantize(inputt, lambda x: LUQPreconditioner(x, 4), stochastic=True)
+
+        T_sum += T / sample_num
+    T_diff = T_sum - inputt
+    print(T_diff, '-'*100, '\n', T_diff / T_sum)
+    #
+    #
+    # sample_num = 1000
+    # mid_sum = torch.zeros_like(inputt)
+    # for _ in trange(sample_num):
+    #     precon = lambda x: LUQPreconditioner(inputt, 4)
+    #     precon_x = precon(inputt)
+    #     mid_ckpt = precon_x.mid_ckpt
+    #
+    #     mid_sum += mid_ckpt / sample_num
+    #
+    # mid_diff = mid_sum - inputt
+    # print(mid_sum, '-'*100, '\n', mid_diff / mid_sum)

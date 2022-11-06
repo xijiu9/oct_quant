@@ -15,6 +15,7 @@ def str2bool(v):
 parser = argparse.ArgumentParser(description='test')
 parser.add_argument('--twolayers_gradweight', '--2gw', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--twolayers_gradinputt', '--2gi', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+parser.add_argument('--luq', type=str2bool, default=False, help='use luq for backward')
 parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
 
 parser.add_argument('--training-bit', type=str, default='', help='weight number of bits',
@@ -95,10 +96,10 @@ os.system("python ./main.py --arch preact_resnet56 --gather-checkpoints --checkp
             --warmup {} {}  ~/data/cifar10 --workspace ./results/cifar/{}/models \
             {} --print-freq 300 --clip-grad {} \
             --bbits {} --bwbits {} --abits {} --wbits {} --lsqforward {} \
-            --twolayers-gradweight {} --twolayers-gradinputt {}"
+            --twolayers-gradweight {} --twolayers-gradinputt {} --luq {}"
             .format(args.checkpoint_epoch, args.training_strategy,
                     args.lr, model, args.weight_decay, arg_epochs,
                     args.warmup, arg, args.training_bit,
                     amp_control, args.clip_grad,
                     bbits, bwbits, awbits, awbits, args.lsqforward,
-                    args.twolayers_gradweight, args.twolayers_gradinputt))
+                    args.twolayers_gradweight, args.twolayers_gradinputt, args.luq))

@@ -164,6 +164,7 @@ def add_parser_arguments(parser):
     parser.add_argument('--freeze-step', type=int, default=0, help='freeze or not the step size update')
     parser.add_argument('--twolayers-gradweight', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
     parser.add_argument('--twolayers-gradinputt', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+    parser.add_argument('--luq', type=str2bool, default=False, help='use luq for backward')
     parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
     parser.add_argument('--clip-grad', type=float, default=10, help='clip gradient')
 
@@ -192,6 +193,7 @@ def main(args):
     config.freeze_step = args.freeze_step
     config.twolayer_weight = args.twolayers_gradweight
     config.twolayer_inputt = args.twolayers_gradinputt
+    config.luq = args.luq
     config.lsqforward = args.lsqforward
     config.args = args
     init(args.batch_size)

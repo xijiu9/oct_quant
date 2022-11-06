@@ -6,7 +6,12 @@ import torch.distributed as dist
 from torch import tensor
 import random
 
-from image_classification.preconditioner import ScalarPreconditioner, ScalarPreconditionerAct, TwoLayerWeightPreconditioner, lsq_per_tensor
+try:
+    from image_classification.preconditioner import ScalarPreconditioner, ScalarPreconditionerAct, \
+        TwoLayerWeightPreconditioner, lsq_per_tensor, LUQPreconditioner
+except:
+    from preconditioner import ScalarPreconditioner, ScalarPreconditionerAct, \
+        TwoLayerWeightPreconditioner, lsq_per_tensor, LUQPreconditioner
 from matplotlib import pyplot as plt
 
 class QuantizationConfig:
@@ -27,6 +32,7 @@ class QuantizationConfig:
         self.freeze_step = 0
         self.twolayer_weight = False
         self.twolayer_inputt = False
+        self.luq = False
         self.lsqforward = False
 
         self.epoch = 0
@@ -45,12 +51,16 @@ class QuantizationConfig:
         return lambda x: ScalarPreconditioner(x, self.bias_num_bits)
 
     def activation_gradient_preconditioner(self):
+        if self.luq:
+            return lambda x: LUQPreconditioner(x, self.backward_num_bits)
         if self.twolayer_inputt:
             return lambda x: TwoLayerWeightPreconditioner(x, self.backward_num_bits)
         else:
             return lambda x: ScalarPreconditioner(x, self.backward_num_bits)
 
     def weight_gradient_preconditioner(self):
+        if self.luq:
+            return lambda x: LUQPreconditioner(x, self.backward_num_bits)
         if self.twolayer_weight:
             return lambda x: TwoLayerWeightPreconditioner(x, self.bweight_num_bits)
         return lambda x: ScalarPreconditioner(x, self.bweight_num_bits)

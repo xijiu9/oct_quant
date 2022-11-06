@@ -16,6 +16,7 @@ def str2bool(v):
 parser = argparse.ArgumentParser(description='test')
 parser.add_argument('--twolayers_gradweight', '--2gw', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
 parser.add_argument('--twolayers_gradinputt', '--2gi', type=str2bool, default=False, help='use two 4 bit to simulate a 8 bit')
+parser.add_argument('--luq', type=str2bool, default=False, help='use luq for backward')
 parser.add_argument('--lsqforward', type=str2bool, default=False, help='apply LSQ')
 
 parser.add_argument('--training-bit', type=str, default='', help='weight number of bits',
@@ -115,11 +116,11 @@ os.system("python ./multiproc.py --nnodes 1 --node_rank 0 --master_addr {} --mas
             --warmup {} {}  /data/LargeData/Large/ImageNet --workspace ./results/imagenet/{}/models \
             {} --print-freq 400 --clip-grad {} --epochs {}\
             --bbits {} --bwbits {} --abits {} --wbits {} --weight-decay {} --lsqforward {} \
-            --twolayers-gradweight {} --twolayers-gradinputt {}"
+            --twolayers-gradweight {} --twolayers-gradinputt {} --luq {}"
           .format(args.master_addr, args.master_port,
                   args.gpu_num, args.arch, args.checkpoint_epoch, args.training_strategy, 
                   args.batch_size, args.lr, args.optimizer_batch_size, model,
                   args.warmup, arg, args.training_bit,
                   amp_control, args.clip_grad, arg_epochs,
                   bbits, bwbits, awbits, awbits, args.weight_decay, args.lsqforward,
-                  args.twolayers_gradweight, args.twolayers_gradinputt))
+                  args.twolayers_gradweight, args.twolayers_gradinputt, args.luq))
